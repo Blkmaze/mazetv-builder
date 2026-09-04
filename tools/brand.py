@@ -58,12 +58,14 @@ if os.path.exists(gradle):
     patch(gradle, [
         (r'applicationId\s*=\s*"[^"]+"', f'applicationId = "{a.package}"'),
         (r'minSdk\s*=\s*[^\n]+', 'minSdk = 21\n        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }'),
+        (r'android \{', 'android {\n    packagingOptions {\n        jniLibs {\n            excludes += listOf("lib/x86/**", "lib/x86_64/**")\n        }\n    }'),
     ])
 else:
     gradle = f"{P}/android/app/build.gradle"
     patch(gradle, [
         (r'applicationId\s+"[^"]+"', f'applicationId "{a.package}"'),
         (r'minSdkVersion\s+[^\n]+', 'minSdkVersion 21\n            ndk { abiFilters "armeabi-v7a", "arm64-v8a" }'),
+        (r'android \{', 'android {\n    packagingOptions {\n        exclude "lib/x86/**"\n        exclude "lib/x86_64/**"\n    }'),
     ])
 print(f"[brand] applicationId -> {a.package}, minSdk 21")
 
