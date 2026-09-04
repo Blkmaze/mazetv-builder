@@ -87,14 +87,26 @@ class _VpnScreenState extends State<VpnScreen> {
                     style: const TextStyle(color: Colors.white60)),
               ),
             const SizedBox(height: 24),
-            TextField(controller: urlCtl, autofocus: true,
-                decoration: const InputDecoration(labelText: '.ovpn profile URL', border: OutlineInputBorder())),
+            TvTextField(
+              controller: urlCtl,
+              label: '.ovpn profile URL',
+              autofocus: true,
+              textInputAction: TextInputAction.next,
+            ),
             const SizedBox(height: 12),
-            TextField(controller: userCtl,
-                decoration: const InputDecoration(labelText: 'VPN username (if required)', border: OutlineInputBorder())),
+            TvTextField(
+              controller: userCtl,
+              label: 'VPN username (if required)',
+              textInputAction: TextInputAction.next,
+            ),
             const SizedBox(height: 12),
-            TextField(controller: passCtl, obscureText: true,
-                decoration: const InputDecoration(labelText: 'VPN password (if required)', border: OutlineInputBorder())),
+            TvTextField(
+              controller: passCtl,
+              label: 'VPN password (if required)',
+              obscureText: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: () { if (!busy) _connect(); },
+            ),
             const SizedBox(height: 24),
             busy
                 ? const Center(child: CircularProgressIndicator())
