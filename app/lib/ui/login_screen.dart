@@ -73,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ] else ...[
                 _field(m3u, 'Playlist URL (.m3u / .m3u8)', autofocus: true),
               ],
-              _field(epg, 'EPG URL (optional XMLTV)'),
+              _field(epg, 'EPG URL (optional XMLTV)', last: true),
               const SizedBox(height: 20),
               busy
                   ? const Center(child: CircularProgressIndicator())
@@ -87,12 +87,15 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _field(TextEditingController c, String label, {bool obscure = false, bool autofocus = false}) => Padding(
+  Widget _field(TextEditingController c, String label, {bool obscure = false, bool autofocus = false, bool last = false}) => Padding(
         padding: const EdgeInsets.only(bottom: 14),
-        child: TextField(
-          controller: c, obscureText: obscure, autofocus: autofocus,
-          style: const TextStyle(fontSize: 20),
-          decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        child: TvTextField(
+          controller: c,
+          label: label,
+          obscureText: obscure,
+          autofocus: autofocus,
+          textInputAction: last ? TextInputAction.done : TextInputAction.next,
+          onSubmitted: last ? _go : null,
         ),
       );
 }
