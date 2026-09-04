@@ -1,0 +1,23 @@
+name: mazetv
+description: White-label Android TV IPTV player (Xtream Codes + M3U + XMLTV EPG + OpenVPN).
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  media_kit: ^1.1.10
+  media_kit_video: ^1.2.4
+  media_kit_libs_video: ^1.0.4
+  http: ^1.2.0
+  shared_preferences: ^2.2.2
+  xml: ^6.5.0
+  openvpn_flutter: ^1.3.5
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/branding.json

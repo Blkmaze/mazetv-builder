@@ -1,0 +1,113 @@
+name: Build branded Android TV APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: "App name shown on the TV (e.g. Maze TV)"
+        required: true
+        default: "Maze TV"
+      package_id:
+        description: "Unique package id, lowercase (e.g. com.mybrand.tv)"
+        required: true
+        default: "com.mazetv.player"
+      primary_color:
+        description: "Brand color, hex (#RRGGBB)"
+        required: true
+        default: "#E50914"
+      portal_url:
+        description: "Pre-fill Xtream server URL (optional)"
+        required: false
+        default: ""
+      epg_url:
+        description: "Default XMLTV EPG URL for M3U users (optional)"
+        required: false
+        default: ""
+      vpn_url:
+        description: "URL of an .ovpn profile for the built-in VPN (optional)"
+        required: false
+        default: ""
+      support_text:
+        description: "Text shown under the login form"
+        required: false
+        default: "Contact your provider for login details."
+      icon_url:
+        description: "URL to a 512x512 PNG icon (optional; initials icon is generated if blank)"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+
+      - name: Python deps for branding script
+        run: pip install pillow
+
+      - name: Create Android project shell
+        run: |
+          set -e
+          ORG="${{ inputs.package_id }}"
+          PROJ="${ORG##*.}"; ORG="${ORG%.*}"
+          mkdir -p build && cd build
+          flutter create --org "$ORG" --project-name "$PROJ" --platforms android proj
+          # drop in our app source over the generated shell
+          rm -rf proj/lib proj/test
+          cp -r ../app/lib proj/lib
+          cp -r ../app/assets proj/assets
+          cp ../app/pubspec.yaml proj/pubspec.yaml
+          sed -i "s/^name: .*/name: $PROJ/" proj/pubspec.yaml
+
+      - name: Apply branding
+        run: |
+          python3 tools/brand.py --project build/proj \
+            --app-name "${{ inputs.app_name }}" \
+            --package "${{ inputs.package_id }}" \
+            --color "${{ inputs.primary_color }}" \
+            --portal-url "${{ inputs.portal_url }}" \
+            --epg-url "${{ inputs.epg_url }}" \
+            --vpn-url "${{ inputs.vpn_url }}" \
+            --support-text "${{ inputs.support_text }}" \
+            --icon "${{ inputs.icon_url }}"
+
+      - name: Build APK
+        working-directory: build/proj
+        run: |
+          flutter pub get
+          flutter build apk --release --target-platform android-arm,android-arm64
+
+      - name: Sign APK
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -e
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > release.jks
+            PASS="$KEYSTORE_PASSWORD"; ALIAS="${KEY_ALIAS:-release}"
+          else
+            echo "::warning::No KEYSTORE_B64 secret set — using a throwaway key. Users will have to uninstall before installing a future build. See README to add a permanent key."
+            PASS="changeit"; ALIAS="release"
+            keytool -genkeypair -v -keystore release.jks -alias "$ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$PASS" -keypass "$PASS" -dname "CN=${{ inputs.app_name }}, O=${{ inputs.package_id }}"
+          fi
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          SAFE=$(echo "${{ inputs.app_name }}" | tr -cd '[:alnum:]' )
+          OUT="${SAFE:-app}-tv.apk"
+          "$BT/apksigner" sign --ks release.jks --ks-pass "pass:$PASS" --key-pass "pass:$PASS" --ks-key-alias "$ALIAS" \
+            --out "$OUT" build/proj/build/app/outputs/flutter-apk/app-release.apk
+          "$BT/apksigner" verify "$OUT"
+          echo "APK_NAME=$OUT" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_NAME }}
+          path: ${{ env.APK_NAME }}
