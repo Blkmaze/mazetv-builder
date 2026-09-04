@@ -36,6 +36,9 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -111,3 +114,10 @@ jobs:
         with:
           name: ${{ env.APK_NAME }}
           path: ${{ env.APK_NAME }}
+
+      - name: Publish as GitHub Release (stable download URL for Downloader)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: ${{ inputs.app_name }} build ${{ github.run_number }}
+          files: ${{ env.APK_NAME }}
