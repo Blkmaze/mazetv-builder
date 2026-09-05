@@ -142,4 +142,40 @@ class Storage {
     final p = await SharedPreferences.getInstance();
     await p.setInt(_kOtaSkip, build);
   }
+
+  // ---- appearance: user-chosen accent color, overriding the build default --
+  static const _kColorOverride = 'color_override_argb';
+
+  static Future<int?> colorOverride() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getInt(_kColorOverride);
+  }
+
+  static Future<void> setColorOverride(int argb) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_kColorOverride, argb);
+  }
+
+  static Future<void> clearColorOverride() async {
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_kColorOverride);
+  }
+
+  // ---- Settings PIN lock --------------------------------------------------
+  static const _kPin = 'settings_pin';
+
+  static Future<String?> settingsPin() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kPin);
+  }
+
+  static Future<void> setSettingsPin(String pin) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kPin, pin);
+  }
+
+  static Future<void> clearSettingsPin() async {
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_kPin);
+  }
 }

@@ -4,6 +4,8 @@ import '../config/branding.dart';
 import '../services/channel_repo.dart';
 import '../services/storage.dart';
 import 'login_screen.dart';
+import 'appearance_screen.dart';
+import 'pin_screen.dart';
 import 'profiles_screen.dart';
 import 'servers_screen.dart';
 import 'tv_widgets.dart';
@@ -18,6 +20,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String version = '';
   bool refreshing = false;
+  String? pin;
 
   @override
   void initState() {
@@ -25,6 +28,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
     PackageInfo.fromPlatform().then((i) {
       if (mounted) setState(() => version = '${i.version} (${i.buildNumber})');
     });
+    Storage.settingsPin().then((p) { if (mounted) setState(() => pin = p); });
+  }
+
+  Future<void> _managePin() async {
+    if (pin != null) {
+      final entered = await Navigator.push<String>(
+          context, MaterialPageRoute(builder: (_) => const PinScreen(title: 'Enter current PIN')));
+      if (entered != pin) {
+        if (entered != null && mounted) await showError(context, Exception('Incorrect PIN'));
+        return;
+      }
+    }
+    if (!mounted) return;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Settings PIN'),
+        content: Text(pin == null
+            ? 'Set a 4-digit PIN so channel surfing doesn\'t accidentally land in Settings.'
+            : 'Change or remove your Settings PIN.'),
+        actions: [
+          if (pin != null)
+            TextButton(onPressed: () => Navigator.pop(context, 'remove'), child: const Text('Remove PIN')),
+          TextButton(autofocus: true, onPressed: () => Navigator.pop(context, 'set'),
+              child: Text(pin == null ? 'Set PIN' : 'Change PIN')),
+          TextButton(onPressed: () => Navigator.pop(context, 'cancel'), child: const Text('Cancel')),
+        ],
+      ),
+    );
+    if (choice == 'remove') {
+      await Storage.clearSettingsPin();
+      if (mounted) setState(() => pin = null);
+      return;
+    }
+    if (choice == 'set') {
+      if (!mounted) return;
+      final p1 = await Navigator.push<String>(
+          context, MaterialPageRoute(builder: (_) => const PinScreen(title: 'Choose a 4-digit PIN')));
+      if (p1 == null || !mounted) return;
+      final p2 = await Navigator.push<String>(
+          context, MaterialPageRoute(builder: (_) => const PinScreen(title: 'Confirm PIN')));
+      if (p2 != p1) {
+        if (mounted) await showError(context, Exception('PINs did not match — try again'));
+        return;
+      }
+      await Storage.setSettingsPin(p1);
+      if (mounted) setState(() => pin = p1);
+    }
   }
 
   Future<void> _refresh() async {
@@ -78,6 +129,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onSelect: refreshing ? () {} : _refresh,
           ),
           TvTile(
+            leading: const Icon(Icons.lock),
+            title: const Text('Settings PIN'),
+            subtitle: Text(pin == null ? 'Not set' : 'Enabled — change or remove'),
+            onSelect: _managePin,
+          ),
+          TvTile(
             leading: const Icon(Icons.dns),
             title: const Text('Servers'),
             subtitle: const Text('Manage saved portals and failover order'),
@@ -94,6 +151,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilesScreen(selecting: false)));
               if (mounted) setState(() {});
             },
+          ),
+          TvTile(
+            leading: const Icon(Icons.palette),
+            title: const Text('Appearance'),
+            subtitle: const Text('Change the accent color'),
+            onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AppearanceScreen())),
           ),
           TvTile(
             leading: const Icon(Icons.vpn_lock),

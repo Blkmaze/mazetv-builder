@@ -4,6 +4,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../models/channel.dart';
 import '../services/channel_repo.dart';
+import '../services/live_stream_tuning.dart';
 import 'player_screen.dart';
 import 'tv_widgets.dart';
 
@@ -105,6 +106,7 @@ class _NowPlayingPreviewState extends State<_NowPlayingPreview> {
   void initState() {
     super.initState();
     _player.setVolume(0);
+    tuneForLiveTs(_player);
     _errSub = _player.stream.error.listen((_) { if (mounted) setState(() => _previewFailed = true); });
     _openPreview(widget.channel);
   }

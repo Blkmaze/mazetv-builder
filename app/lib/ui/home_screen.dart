@@ -9,6 +9,7 @@ import '../services/storage.dart';
 import 'coming_soon_screen.dart';
 import 'guide_screen.dart';
 import 'live_preview.dart';
+import 'pin_screen.dart';
 import 'login_screen.dart';
 import 'player_screen.dart';
 import 'profiles_screen.dart';
@@ -117,6 +118,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openSettings() async {
+    final pin = await Storage.settingsPin();
+    if (pin != null) {
+      if (!mounted) return;
+      final entered = await Navigator.push<String>(
+          context, MaterialPageRoute(builder: (_) => const PinScreen(title: 'Enter PIN')));
+      if (entered != pin) {
+        if (entered != null && mounted) await showError(context, Exception('Incorrect PIN'));
+        return;
+      }
+    }
+    if (!mounted) return;
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
     if (mounted) setState(() {});
   }
@@ -210,7 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
             // ---- channel list, with a live preview strip pinned above it
             Expanded(
               child: Column(children: [
-                LivePreviewStrip(key: ValueKey(previewChannel?.id), channel: previewChannel),
+                LivePreviewStrip(key: const ValueKey('home-preview'), channel: previewChannel),
                 const Divider(height: 1),
                 Expanded(
                   child: channels.isEmpty

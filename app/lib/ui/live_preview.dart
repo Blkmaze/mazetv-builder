@@ -4,6 +4,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../models/channel.dart';
 import '../services/channel_repo.dart';
+import '../services/live_stream_tuning.dart';
 import 'tv_widgets.dart';
 
 /// Small muted live thumbnail + now-playing line, meant to sit at the top
@@ -24,11 +25,13 @@ class _LivePreviewStripState extends State<LivePreviewStrip> {
   StreamSubscription? _errSub;
   Timer? _debounce;
   bool _failed = false;
+  int _openToken = 0;
 
   @override
   void initState() {
     super.initState();
     _player.setVolume(0);
+    tuneForLiveTs(_player);
     _errSub = _player.stream.error.listen((_) { if (mounted) setState(() => _failed = true); });
     if (widget.channel != null) _open(widget.channel!);
   }
@@ -44,11 +47,12 @@ class _LivePreviewStripState extends State<LivePreviewStrip> {
 
   Future<void> _open(Channel c) async {
     if (!mounted) return;
+    final token = ++_openToken;
     setState(() => _failed = false);
     try {
       await _player.open(Media(c.streamUrl));
     } catch (_) {
-      if (mounted) setState(() => _failed = true);
+      if (mounted && token == _openToken) setState(() => _failed = true);
     }
   }
 

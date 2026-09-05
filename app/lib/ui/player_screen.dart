@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../models/channel.dart';
 import '../services/channel_repo.dart';
+import '../services/live_stream_tuning.dart';
 import '../services/storage.dart';
 import 'tv_widgets.dart';
 
@@ -34,6 +35,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void initState() {
     super.initState();
+    tuneForLiveTs(player);
     player.stream.error.listen((e) { if (mounted) setState(() => error = e); });
     _open();
   }
