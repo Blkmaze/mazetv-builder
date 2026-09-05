@@ -6,7 +6,8 @@ class OtaUpdate {
   final int build;
   final String downloadUrl;
   final String assetName;
-  const OtaUpdate({required this.build, required this.downloadUrl, required this.assetName});
+  final int sizeBytes;
+  const OtaUpdate({required this.build, required this.downloadUrl, required this.assetName, this.sizeBytes = 0});
 }
 
 /// Checks this brand's GitHub repo for a newer signed APK than the one
@@ -45,7 +46,12 @@ class OtaService {
       for (final a in assets) {
         final name = (a['name'] ?? '').toString();
         if (name == expectedAsset) {
-          best = OtaUpdate(build: build, downloadUrl: (a['browser_download_url'] ?? '').toString(), assetName: name);
+          best = OtaUpdate(
+            build: build,
+            downloadUrl: (a['browser_download_url'] ?? '').toString(),
+            assetName: name,
+            sizeBytes: (a['size'] as num?)?.toInt() ?? 0,
+          );
           break;
         }
       }
