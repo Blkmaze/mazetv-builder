@@ -32,9 +32,16 @@ class XtreamService {
     }
   }
 
-  /// Strip the URL (which carries credentials) out of socket error text.
-  static String _plain(Object e) =>
-      e.toString().replaceAll(RegExp(r',?\s*uri=\S+'), '').replaceFirst('ClientException with ', '');
+  /// Strip the URL (carries credentials) and the raw OS-level address/port
+  /// noise out of socket error text — that "port" is often just the local
+  /// ephemeral port the OS picked for the outgoing connection, not a second
+  /// real target, and showing it next to our own host:port only confuses
+  /// what actually failed.
+  static String _plain(Object e) => e
+      .toString()
+      .replaceAll(RegExp(r',?\s*uri=\S+'), '')
+      .replaceAll(RegExp(r',?\s*address\s*=\s*[^,]+,?\s*port\s*=\s*\d+'), '')
+      .replaceFirst('ClientException with ', '');
 
   /// Throws with a readable message if the login is rejected.
   Future<Map<String, dynamic>> login() async {
