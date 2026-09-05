@@ -50,12 +50,20 @@ class ChannelRepo {
         activeServer = s;
         return;
       } catch (e) {
-        failures.add('${s.nickname}: ${e.toString().replaceFirst('Exception: ', '')}');
+        failures.add('${s.nickname}: ${_scrub(e.toString().replaceFirst('Exception: ', ''))}');
       }
     }
     activeServer = null;
     throw Exception('All servers failed —\n${failures.join('\n')}');
   }
+
+  /// Last-resort backstop: strip anything that looks like a full URL or a
+  /// raw uri=/address=.../port=... fragment before this ever reaches the
+  /// screen, in case a future error path forgets to sanitize at the source.
+  static String _scrub(String s) => s
+      .replaceAll(RegExp(r'https?://\S+'), '[server]')
+      .replaceAll(RegExp(r',?\s*uri=\S+'), '')
+      .replaceAll(RegExp(r',?\s*address\s*=\s*[^,]+,?\s*port\s*=\s*\d+'), '');
 
   /// Fire-and-forget; UI listens via [onEpgLoaded].
   Future<void> loadEpg() async {

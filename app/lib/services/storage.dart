@@ -37,6 +37,32 @@ class Storage {
     return p.getString(_kLastChannel);
   }
 
+  // ---- most-watched channels ("Your Most Watched Channels" row) ----------
+  // Recency-ordered, not frequency-counted: watching a channel moves it to
+  // the front. Simple, and matches what a viewer expects from "recently
+  // watched" — the thing they saw last is the thing at the top.
+  static const _kMostWatched = 'most_watched_channels_v1';
+  static const _kMostWatchedCap = 10;
+
+  static Future<void> recordWatch(String channelId) async {
+    final p = await SharedPreferences.getInstance();
+    final list = p.getStringList(_kMostWatched) ?? [];
+    list.remove(channelId);
+    list.insert(0, channelId);
+    if (list.length > _kMostWatchedCap) list.removeRange(_kMostWatchedCap, list.length);
+    await p.setStringList(_kMostWatched, list);
+  }
+
+  static Future<List<String>> mostWatchedChannelIds() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getStringList(_kMostWatched) ?? [];
+  }
+
+  static Future<void> clearMostWatched() async {
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_kMostWatched);
+  }
+
   // ---- servers (multi-source / failover) ----------------------------------
 
   /// Returns the saved server list, migrating a legacy single [_kAccount]

@@ -76,6 +76,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _open() async {
     setState(() { error = null; overlay = true; buffering = true; });
     Storage.saveLastChannel(ch.id);
+    Storage.recordWatch(ch.id);
     _stallTimer?.cancel();
     _stallTimer = Timer(const Duration(seconds: 15), () {
       if (mounted && buffering && error == null) {

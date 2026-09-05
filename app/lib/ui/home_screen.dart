@@ -38,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? activeProfileId;
   Set<String> favorites = {};
   Channel? previewChannel;
+  List<Channel> mostWatched = [];
 
   @override
   void initState() {
@@ -66,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
       favorites = await Storage.favorites(activeProfileId);
 
       group = repo.groups.isEmpty ? null : repo.groups.first;
+      await _loadMostWatched();
       if (!mounted) return;
       setState(() {
         loading = false;
@@ -145,8 +147,21 @@ class _HomeScreenState extends State<HomeScreen> {
     await Storage.setFavorites(activeProfileId, favorites);
   }
 
-  void _play(List<Channel> list, int index) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(playlist: list, index: index)));
+  void _play(List<Channel> list, int index) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(playlist: list, index: index)));
+    await _loadMostWatched();
+  }
+
+  Future<void> _loadMostWatched() async {
+    final ids = await Storage.mostWatchedChannelIds();
+    final byId = {for (final c in repo.channels) c.id: c};
+    final list = [for (final id in ids) if (byId[id] != null) byId[id]!];
+    if (mounted) setState(() => mostWatched = list);
+  }
+
+  Future<void> _clearMostWatched() async {
+    await Storage.clearMostWatched();
+    if (mounted) setState(() => mostWatched = []);
   }
 
   @override
@@ -182,6 +197,36 @@ class _HomeScreenState extends State<HomeScreen> {
           ]),
         ),
         const Divider(height: 1),
+        if (mostWatched.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+            child: Row(children: [
+              const Text('Your Most Watched Channels', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _clearMostWatched,
+                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.white54),
+                label: const Text('Clear most watched', style: TextStyle(color: Colors.white54, fontSize: 13)),
+              ),
+            ]),
+          ),
+          SizedBox(
+            height: 96,
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              scrollDirection: Axis.horizontal,
+              itemCount: mostWatched.length,
+              itemBuilder: (_, i) {
+                final c = mostWatched[i];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _MostWatchedTile(channel: c, onSelect: () => _play(mostWatched, i)),
+                );
+              },
+            ),
+          ),
+          const Divider(height: 1),
+        ],
         Expanded(
           child: Row(children: [
             // ---- collapsible icon nav (expands to labels while focus is inside it)
@@ -287,4 +332,43 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   static String _hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+}
+
+/// One tile in the "Your Most Watched Channels" row — logo + name,
+/// focusable so it's reachable and playable straight from the remote.
+class _MostWatchedTile extends StatelessWidget {
+  final Channel channel;
+  final VoidCallback onSelect;
+  const _MostWatchedTile({required this.channel, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      child: Builder(builder: (ctx) {
+        final focused = Focus.of(ctx).hasFocus;
+        return InkWell(
+          onTap: onSelect,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 140,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: focused ? primary.withOpacity(0.25) : Colors.white10,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: focused ? primary : Colors.transparent, width: 2),
+            ),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              ChannelLogo(channel.logo, size: 40),
+              const SizedBox(height: 6),
+              Text(channel.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+            ]),
+          ),
+        );
+      }),
+    );
+  }
 }
