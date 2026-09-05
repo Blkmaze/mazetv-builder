@@ -1,8 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// A list row that visibly highlights when the D-pad focus lands on it.
-class TvTile extends StatelessWidget {
+class TvTile extends StatefulWidget {
   final Widget title;
   final Widget? subtitle;
   final Widget? leading;
@@ -27,17 +28,66 @@ class TvTile extends StatelessWidget {
   });
 
   @override
+  State<TvTile> createState() => _TvTileState();
+}
+
+class _TvTileState extends State<TvTile> {
+  Timer? _holdTimer;
+  bool _longFired = false;
+
+  static const _activateKeys = {
+    LogicalKeyboardKey.select, LogicalKeyboardKey.enter, LogicalKeyboardKey.numpadEnter,
+    LogicalKeyboardKey.gameButtonA, LogicalKeyboardKey.space,
+  };
+
+  /// A held OK/Enter on a physical remote arrives as a KeyDownEvent then,
+  /// later, a KeyUpEvent — there's no touch "long press" gesture to detect,
+  /// which is why InkWell.onLongPress alone never fires from a remote.
+  /// This starts our own timer on key-down and, if the key is still down
+  /// when it fires, calls onLongSelect and swallows the eventual key-up so
+  /// the normal short-press select doesn't also fire for the same hold.
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (widget.onLongSelect == null || !_activateKeys.contains(event.logicalKey)) {
+      return KeyEventResult.ignored;
+    }
+    if (event is KeyDownEvent) {
+      _longFired = false;
+      _holdTimer?.cancel();
+      _holdTimer = Timer(const Duration(milliseconds: 550), () {
+        _longFired = true;
+        widget.onLongSelect!();
+      });
+      return KeyEventResult.ignored; // let the normal short-press path stay live too
+    }
+    if (event is KeyUpEvent) {
+      _holdTimer?.cancel();
+      if (_longFired) {
+        _longFired = false;
+        return KeyEventResult.handled; // swallow — don't also fire onSelect for this hold
+      }
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    // Outer Focus only observes; the InkWell owns the real focus node so
-    // OK/Enter on the remote fires onSelect.
+    // Outer Focus only observes (+ intercepts hold-to-favorite); the InkWell
+    // owns the real focus node so OK/Enter on the remote fires onSelect.
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
+      onKeyEvent: _handleKey,
       child: Builder(builder: (ctx) {
         final focused = Focus.of(ctx).hasFocus;
         return InkWell(
-          autofocus: autofocus,
+          autofocus: widget.autofocus,
           onFocusChange: (has) {
             // Keep the focused row on screen when the remote moves focus
             // past the edge of what's currently visible.
@@ -52,25 +102,25 @@ class TvTile extends StatelessWidget {
                 }
               });
             }
-            onFocusChange?.call(has);
+            widget.onFocusChange?.call(has);
           },
-          onTap: onSelect,
-          onLongPress: onLongSelect,
+          onTap: widget.onSelect,
+          onLongPress: widget.onLongSelect, // still works for touch/mouse testing
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             decoration: BoxDecoration(
               color: focused
                   ? primary.withOpacity(0.85)
-                  : selected
+                  : widget.selected
                       ? Colors.white.withOpacity(0.08)
                       : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: ListTile(
-              leading: leading,
-              title: title,
-              subtitle: subtitle,
-              trailing: trailing,
+              leading: widget.leading,
+              title: widget.title,
+              subtitle: widget.subtitle,
+              trailing: widget.trailing,
               textColor: focused ? Colors.white : null,
             ),
           ),
