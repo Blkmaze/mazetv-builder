@@ -16,10 +16,23 @@ class XtreamService {
       '${action == null ? '' : '&action=$action'}');
 
   Future<dynamic> _get(Uri u) async {
-    final r = await http.get(u).timeout(const Duration(seconds: 20));
-    if (r.statusCode != 200) throw Exception('HTTP ${r.statusCode} from portal');
-    return jsonDecode(r.body);
+    http.Response r;
+    try {
+      r = await http.get(u).timeout(const Duration(seconds: 20));
+    } catch (e) {
+      throw Exception('Could not reach ${u.host}:${u.port} — ${_plain(e)}');
+    }
+    if (r.statusCode != 200) throw Exception('Portal answered HTTP ${r.statusCode}');
+    try {
+      return jsonDecode(r.body);
+    } catch (_) {
+      throw Exception('Portal did not return JSON — check the server URL and port');
+    }
   }
+
+  /// Strip the URL (which carries credentials) out of socket error text.
+  static String _plain(Object e) =>
+      e.toString().replaceAll(RegExp(r',?\s*uri=\S+'), '').replaceFirst('ClientException with ', '');
 
   /// Throws with a readable message if the login is rejected.
   Future<Map<String, dynamic>> login() async {

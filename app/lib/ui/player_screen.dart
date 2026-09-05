@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -24,6 +25,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool overlay = true;
   Timer? hideTimer;
   String? error;
+  final _digits = Queue<String>();
+  Timer? _digitTimer;
+  String _digitPreview = '';
 
   Channel get ch => widget.playlist[idx];
 
@@ -46,6 +50,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
     hideTimer = Timer(const Duration(seconds: 4), () { if (mounted) setState(() => overlay = false); });
   }
 
+  void _onDigit(String d) {
+    _digits.add(d);
+    if (_digits.length > 4) _digits.removeFirst();
+    _digitTimer?.cancel();
+    setState(() => _digitPreview = _digits.join());
+    _digitTimer = Timer(const Duration(milliseconds: 1200), _jumpToTyped);
+  }
+
+  void _jumpToTyped() {
+    final n = int.tryParse(_digits.join());
+    _digits.clear();
+    setState(() => _digitPreview = '');
+    if (n == null) return;
+    final target = n - 1;
+    if (target >= 0 && target < widget.playlist.length && target != idx) {
+      idx = target;
+      _open();
+    }
+  }
+
   void _step(int d) {
     idx = (idx + d) % widget.playlist.length;
     if (idx < 0) idx += widget.playlist.length;
@@ -55,6 +79,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void dispose() {
     hideTimer?.cancel();
+    _digitTimer?.cancel();
     player.dispose();
     super.dispose();
   }
@@ -74,12 +99,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
           if (k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.gameButtonA) {
             setState(() => overlay = !overlay); if (overlay) _scheduleHide(); return KeyEventResult.handled;
           }
+          final label = e.character;
+          if (label != null && RegExp(r'^[0-9]$').hasMatch(label)) { _onDigit(label); return KeyEventResult.handled; }
           return KeyEventResult.ignored;
         },
         child: Stack(fit: StackFit.expand, children: [
           Video(controller: controller, controls: NoVideoControls),
           if (error != null)
             Center(child: Text('Stream error: $error', style: const TextStyle(color: Colors.redAccent, fontSize: 20))),
+          if (_digitPreview.isNotEmpty)
+            Positioned(
+              top: 32, right: 32,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(8)),
+                child: Text(_digitPreview, style: const TextStyle(fontSize: 32, color: Colors.white)),
+              ),
+            ),
           if (overlay)
             Positioned(
               left: 0, right: 0, bottom: 0,

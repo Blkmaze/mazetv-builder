@@ -18,7 +18,7 @@ on:
       portal_url:
         description: "Pre-fill Xtream server URL (optional)"
         required: false
-        default: ""
+        default: "http://pradahype.com:33726"
       epg_url:
         description: "Default XMLTV EPG URL for M3U users (optional)"
         required: false
@@ -33,6 +33,14 @@ on:
         default: "Contact your provider for login details."
       icon_url:
         description: "URL to a 512x512 PNG icon (optional; initials icon is generated if blank)"
+        required: false
+        default: ""
+      portals:
+        description: 'Pre-configured servers as JSON — if set, login shows a picker instead of a raw URL field'
+        required: false
+        default: '[{"name":"Prada","host":"http://pradahype.com:33726"},{"name":"CDN","host":"http://kytv.xyz"},{"name":"XYZ Live","host":"https://live.xyzchd.io:443"},{"name":"BlackLabel","host":"https://blacklabelx.online:443"}]'
+      pair_base_url:
+        description: "Your Netlify site URL (e.g. https://mazetv.netlify.app) — enables 'Sign in with a code' on the login screen"
         required: false
         default: ""
 
@@ -78,7 +86,9 @@ jobs:
             --epg-url "${{ inputs.epg_url }}" \
             --vpn-url "${{ inputs.vpn_url }}" \
             --support-text "${{ inputs.support_text }}" \
-            --icon "${{ inputs.icon_url }}"
+            --icon "${{ inputs.icon_url }}" \
+            --portals '${{ inputs.portals }}' \
+            --pair-base-url "${{ inputs.pair_base_url }}"
 
       - name: Build APK
         working-directory: build/proj

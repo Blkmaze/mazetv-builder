@@ -5,9 +5,9 @@ import '../services/channel_repo.dart';
 import '../services/storage.dart';
 import 'guide_screen.dart';
 import 'login_screen.dart';
+import 'settings_screen.dart';
 import 'player_screen.dart';
 import 'tv_widgets.dart';
-import 'vpn_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -76,10 +76,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             TvTile(leading: const Icon(Icons.grid_view), title: const Text('TV Guide'),
                 onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GuideScreen()))),
-            TvTile(leading: const Icon(Icons.vpn_lock), title: const Text('VPN'),
-                onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VpnScreen()))),
             TvTile(leading: const Icon(Icons.search), title: const Text('Search'), onSelect: _openSearch),
-            TvTile(leading: const Icon(Icons.logout), title: const Text('Sign out'), onSelect: _logout),
+            TvTile(leading: const Icon(Icons.settings), title: const Text('Settings'),
+                onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
             const Divider(),
             Expanded(
               child: ListView.builder(
@@ -106,7 +105,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     final c = channels[i];
                     final now = repo.epg.nowPlaying(c.epgId);
                     return TvTile(
-                      leading: ChannelLogo(c.logo),
+                      leading: SizedBox(
+                        width: 74,
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          SizedBox(width: 28, child: Text('${i + 1}', textAlign: TextAlign.right,
+                              style: const TextStyle(color: Colors.white38, fontSize: 15))),
+                          const SizedBox(width: 8),
+                          ChannelLogo(c.logo),
+                        ]),
+                      ),
                       title: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: now == null ? null
                           : Text('${_hm(now.start)}–${_hm(now.stop)}  ${now.title}',

@@ -34,6 +34,21 @@ class TvTile extends StatelessWidget {
         final focused = Focus.of(ctx).hasFocus;
         return InkWell(
           autofocus: autofocus,
+          onFocusChange: (has) {
+            // Keep the focused row on screen when the remote moves focus
+            // past the edge of what's currently visible.
+            if (has) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (ctx.mounted) {
+                  Scrollable.maybeOf(ctx)?.position.ensureVisible(
+                        ctx.findRenderObject()!,
+                        alignment: 0.5,
+                        duration: const Duration(milliseconds: 150),
+                      );
+                }
+              });
+            }
+          },
           onTap: onSelect,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
@@ -55,95 +70,6 @@ class TvTile extends StatelessWidget {
           ),
         );
       }),
-    );
-  }
-}
-
-/// A TextField built for D-pad remotes.
-///
-/// Plain [TextField]s swallow Up/Down as text-editing shortcuts (moving the
-/// cursor) instead of letting them bubble up to focus traversal, so on a TV
-/// remote focus gets stuck in the field and OK just reopens the on-screen
-/// keyboard. This widget gives the field its own [FocusNode] with
-/// `onKeyEvent` wired directly to it, which runs before the built-in text
-/// editing shortcuts and lets us hand Up/Down back to [FocusScope] to move
-/// to the previous/next field. The on-screen keyboard's "Next" action does
-/// the same thing (or triggers [onSubmitted] on the last field in a group).
-class TvTextField extends StatefulWidget {
-  final TextEditingController controller;
-  final String label;
-  final bool obscureText;
-  final bool autofocus;
-  final TextInputType? keyboardType;
-  final TextInputAction textInputAction;
-  final VoidCallback? onSubmitted;
-
-  const TvTextField({
-    super.key,
-    required this.controller,
-    required this.label,
-    this.obscureText = false,
-    this.autofocus = false,
-    this.keyboardType,
-    this.textInputAction = TextInputAction.next,
-    this.onSubmitted,
-  });
-
-  @override
-  State<TvTextField> createState() => _TvTextFieldState();
-}
-
-class _TvTextFieldState extends State<TvTextField> {
-  late final FocusNode _node;
-
-  @override
-  void initState() {
-    super.initState();
-    _node = FocusNode(onKeyEvent: _handleKey);
-  }
-
-  @override
-  void dispose() {
-    _node.dispose();
-    super.dispose();
-  }
-
-  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.arrowDown) {
-      FocusScope.of(context).nextFocus();
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowUp) {
-      FocusScope.of(context).previousFocus();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  void _advance() {
-    if (widget.onSubmitted != null) {
-      widget.onSubmitted!();
-    } else if (widget.textInputAction == TextInputAction.done) {
-      _node.unfocus();
-    } else {
-      FocusScope.of(context).nextFocus();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: widget.controller,
-      focusNode: _node,
-      obscureText: widget.obscureText,
-      autofocus: widget.autofocus,
-      keyboardType: widget.keyboardType,
-      textInputAction: widget.textInputAction,
-      style: const TextStyle(fontSize: 20),
-      decoration: InputDecoration(labelText: widget.label, border: const OutlineInputBorder()),
-      onSubmitted: (_) => _advance(),
     );
   }
 }
@@ -192,3 +118,47 @@ Future<void> showError(BuildContext context, Object e) => showDialog(
         actions: [TextButton(autofocus: true, onPressed: () => Navigator.pop(context), child: const Text('OK'))],
       ),
     );
+
+/// TextField that behaves on a remote: Up/Down move to the previous/next
+/// field instead of moving the text cursor, and the keyboard's Next key
+/// also advances. Left/Right still move the cursor.
+class TvTextField extends StatefulWidget {
+  final TextEditingController controller;
+  final String label;
+  final bool obscure;
+  final bool autofocus;
+  final bool last;
+  const TvTextField({super.key, required this.controller, required this.label,
+      this.obscure = false, this.autofocus = false, this.last = false});
+  @override
+  State<TvTextField> createState() => _TvTextFieldState();
+}
+
+class _TvTextFieldState extends State<TvTextField> {
+  late final FocusNode node = FocusNode(onKeyEvent: (n, e) {
+    if (e is! KeyDownEvent) return KeyEventResult.ignored;
+    if (e.logicalKey == LogicalKeyboardKey.arrowDown) { n.nextFocus(); return KeyEventResult.handled; }
+    if (e.logicalKey == LogicalKeyboardKey.arrowUp) { n.previousFocus(); return KeyEventResult.handled; }
+    return KeyEventResult.ignored;
+  });
+
+  @override
+  void dispose() { node.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextField(
+        controller: widget.controller,
+        focusNode: node,
+        obscureText: widget.obscure,
+        autofocus: widget.autofocus,
+        textInputAction: widget.last ? TextInputAction.done : TextInputAction.next,
+        onSubmitted: (_) => widget.last ? node.unfocus() : node.nextFocus(),
+        style: const TextStyle(fontSize: 20),
+        decoration: InputDecoration(labelText: widget.label, border: const OutlineInputBorder()),
+      ),
+    );
+  }
+}

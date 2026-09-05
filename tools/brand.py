@@ -26,6 +26,8 @@ ap.add_argument("--epg-url", default="")
 ap.add_argument("--vpn-url", default="")
 ap.add_argument("--support-text", default="")
 ap.add_argument("--icon", default="")
+ap.add_argument("--portals", default="[]", help='JSON list like [{"name":"Prada","host":"http://pradahype.com:33726"}]')
+ap.add_argument("--pair-base-url", default="")
 a = ap.parse_args()
 
 P = a.project
@@ -37,10 +39,17 @@ if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
 
 # 1. branding.json -----------------------------------------------------------
 os.makedirs(f"{P}/assets", exist_ok=True)
+try:
+    portals = json.loads(a.portals)
+    assert isinstance(portals, list)
+except Exception:
+    sys.exit(f"--portals must be a JSON list, got: {a.portals}")
+
 with open(f"{P}/assets/branding.json", "w") as f:
     json.dump({
         "app_name": a.app_name, "primary_color": color, "portal_url": a.portal_url,
         "epg_url": a.epg_url, "vpn_config_url": a.vpn_url, "support_text": a.support_text,
+        "portals": portals, "pair_base_url": a.pair_base_url,
     }, f, indent=2)
 print("[brand] wrote branding.json")
 
@@ -58,16 +67,14 @@ if os.path.exists(gradle):
     patch(gradle, [
         (r'applicationId\s*=\s*"[^"]+"', f'applicationId = "{a.package}"'),
         (r'minSdk\s*=\s*[^\n]+', 'minSdk = 21\n        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }'),
-        (r'android \{', 'android {\n    packagingOptions {\n        jniLibs {\n            excludes += listOf("lib/x86/**", "lib/x86_64/**")\n        }\n    }'),
     ])
 else:
     gradle = f"{P}/android/app/build.gradle"
     patch(gradle, [
         (r'applicationId\s+"[^"]+"', f'applicationId "{a.package}"'),
-        (r'minSdkVersion\s+[^\n]+', 'minSdkVersion 21\n            ndk { abiFilters "armeabi-v7a", "arm64-v8a" }'),
-        (r'android \{', 'android {\n    packagingOptions {\n        exclude "lib/x86/**"\n        exclude "lib/x86_64/**"\n    }'),
+        (r'minSdkVersion\s+[^\n]+', 'minSdkVersion 21\n        ndk { abiFilters "armeabi-v7a", "arm64-v8a" }'),
     ])
-print(f"[brand] applicationId -> {a.package}, minSdk 21")
+print(f"[brand] applicationId -> {a.package}, minSdk 21, ABIs: armeabi-v7a + arm64-v8a only")
 
 # 3. manifest ----------------------------------------------------------------
 man = f"{P}/android/app/src/main/AndroidManifest.xml"

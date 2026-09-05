@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MazeTV Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1c2230;
+    --panel: #262e3f;
+    --line: #37405a;
+    --text: #e8ecf2;
+    --muted: #8b95a8;
+    --brand: #e50914;
+    --ok: #4cd97b;
+    --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 Outfit, system-ui, sans-serif; }
+  a { color: inherit; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 36px; }
+  header h1 { margin: 0; font-size: 30px; font-weight: 600; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: 440px 1fr; gap: 40px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  form { display: grid; gap: 18px; }
+  label { display: grid; gap: 6px; font-weight: 500; }
+  label small { font-weight: 400; color: var(--muted); }
+  input[type=text], input[type=url], input[type=password] {
+    width: 100%; padding: 11px 13px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font: inherit;
+  }
+  input:focus { outline: 2px solid var(--brand); outline-offset: 1px; border-color: transparent; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .color { display: flex; gap: 10px; align-items: center; }
+  .color input[type=color] { width: 46px; height: 42px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 3px; }
+  details { border-top: 1px solid var(--line); padding-top: 14px; }
+  details summary { cursor: pointer; color: var(--muted); font-weight: 500; }
+  details > div { display: grid; gap: 18px; margin-top: 16px; }
+  button.build {
+    margin-top: 6px; padding: 14px 18px; border: 0; border-radius: 10px; background: var(--brand); color: #fff;
+    font: 600 17px Outfit, sans-serif; cursor: pointer;
+  }
+  button.build:disabled { opacity: .55; cursor: wait; }
+  button.build:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+  /* ---- the TV ---- */
+  .tv { position: sticky; top: 24px; }
+  .screen {
+    aspect-ratio: 16 / 9; width: 100%; border-radius: 14px; background: #0e0e10;
+    border: 10px solid #101319; box-shadow: 0 30px 60px -20px rgba(0,0,0,.7), inset 0 0 0 1px #2a3040;
+    display: grid; place-items: center; overflow: hidden; position: relative;
+  }
+  .login { width: 52%; text-align: center; display: grid; gap: 9px; }
+  .login .name { font-size: clamp(22px, 3.6vw, 40px); font-weight: 700; color: var(--brand); line-height: 1.1; }
+  .login .logo { width: 56px; height: 56px; margin: 0 auto 4px; border-radius: 12px; object-fit: contain; background: transparent; }
+  .login .field { height: 22px; border: 1px solid #3a3a42; border-radius: 5px; background: #17171a; }
+  .login .btn { height: 26px; border-radius: 6px; background: var(--brand); }
+  .login .support { font-size: 10px; color: #8a8a92; }
+  .banner-wrap { margin-top: 18px; display: flex; align-items: center; gap: 16px; color: var(--muted); }
+  .banner {
+    width: 160px; height: 90px; border-radius: 6px; background: var(--brand); display: flex; align-items: center; gap: 8px; padding: 10px; color: #fff; font-weight: 700; font-size: 14px;
+  }
+  .banner .ico { width: 56px; height: 56px; border-radius: 10px; background: rgba(255,255,255,.18); display: grid; place-items: center; font-size: 22px; overflow: hidden; }
+  .banner .ico img { width: 100%; height: 100%; object-fit: contain; }
+
+  /* ---- status ---- */
+  .status { margin-top: 26px; padding: 18px 20px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); display: none; }
+  .status.show { display: block; }
+  .status .line { display: flex; align-items: center; gap: 12px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.building { background: var(--brand); animation: pulse 1.2s ease-in-out infinite; }
+  .dot.done { background: var(--ok); }
+  .dot.failed { background: var(--bad); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .dot.building { animation: none; } }
+  .result { margin-top: 14px; display: grid; gap: 8px; }
+  .code { font-size: 28px; font-weight: 700; letter-spacing: .02em; }
+  .code small { font-size: 14px; font-weight: 400; color: var(--muted); display: block; }
+  .result a.dl { color: var(--muted); font-size: 14px; word-break: break-all; }
+  .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>MazeTV Builder</h1>
+    <p>Brand it, build it, hand out the code.</p>
+  </header>
+
+  <div class="grid">
+    <form id="f" autocomplete="off">
+      <label>App name
+        <input type="text" id="app_name" value="Maze TV" required>
+      </label>
+      <div class="row">
+        <label>Package id <small>unique per brand</small>
+          <input type="text" id="package_id" value="com.mazetv.player" pattern="[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+" required>
+        </label>
+        <label>Brand color
+          <span class="color">
+            <input type="color" id="color_pick" value="#e50914">
+            <input type="text" id="primary_color" value="#E50914" pattern="#[0-9a-fA-F]{6}">
+          </span>
+        </label>
+      </div>
+      <label>Icon URL <small>direct link to a square PNG; leave blank for an initials icon</small>
+        <input type="url" id="icon_url" placeholder="https://…/logo.png">
+      </label>
+      <label>Support text <small>shown under the sign-in form</small>
+        <input type="text" id="support_text" value="Contact your provider for login details.">
+      </label>
+
+      <label>Pairing site URL <small>your Netlify site's own URL — enables "Sign in with a code"</small>
+        <input type="text" id="pair_base_url" placeholder="https://mazetv.netlify.app">
+      </label>
+      <label>Pre-configured servers <small>JSON list; viewers pick a name instead of typing a URL. Leave as [] to skip.</small>
+        <input type="text" id="portals" value='[{"name":"Prada","host":"http://pradahype.com:33726"},{"name":"CDN","host":"http://kytv.xyz"},{"name":"XYZ Live","host":"https://live.xyzchd.io:443"},{"name":"BlackLabel","host":"https://blacklabelx.online:443"}]'>
+      </label>
+
+      <details>
+        <summary>Pre-filled server settings</summary>
+        <div>
+          <label>Xtream portal URL <small>pre-fills the sign-in screen</small>
+            <input type="url" id="portal_url" value="http://pradahype.com:33726" placeholder="http://portal.example.com:8080">
+          </label>
+          <label>EPG URL <small>XMLTV for M3U users</small>
+            <input type="url" id="epg_url">
+          </label>
+          <label>VPN profile URL <small>.ovpn file for the built-in VPN</small>
+            <input type="url" id="vpn_url">
+          </label>
+        </div>
+      </details>
+
+      <label>Builder password
+        <input type="password" id="password" required>
+      </label>
+
+      <button class="build" id="go" type="submit">Build APK</button>
+    </form>
+
+    <div class="tv">
+      <div class="screen">
+        <div class="login">
+          <img class="logo" id="pv_logo" alt="" hidden>
+          <div class="name" id="pv_name">Maze TV</div>
+          <div class="field"></div><div class="field"></div><div class="field"></div>
+          <div class="btn"></div>
+          <div class="support" id="pv_support">Contact your provider for login details.</div>
+        </div>
+      </div>
+      <div class="banner-wrap">
+        <div class="banner"><div class="ico" id="pv_ico">MT</div><span id="pv_bname">Maze TV</span></div>
+        <span>How it appears on the Fire TV home row</span>
+      </div>
+
+      <div class="status" id="status">
+        <div class="line"><span class="dot" id="dot"></span><span id="msg"></span>
+          <a id="runlink" href="#" target="_blank" hidden style="margin-left:auto;color:var(--muted);font-size:14px">Open build log</a>
+        </div>
+        <div class="result" id="result" hidden>
+          <div class="code" id="short"></div>
+          <a class="dl" id="dl" target="_blank"></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fields = ["app_name","package_id","primary_color","icon_url","support_text","portal_url","epg_url","vpn_url","portals","pair_base_url"];
+
+// ---- live preview
+function initials(n) { return (n.trim().split(/\s+/).slice(0,2).map(w => w[0] || "").join("") || "TV").toUpperCase(); }
+function preview() {
+  const name = $("app_name").value || "Your app";
+  const color = $("primary_color").value;
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) { document.documentElement.style.setProperty("--brand", color); $("color_pick").value = color.toLowerCase(); }
+  $("pv_name").textContent = name; $("pv_bname").textContent = name.slice(0, 14);
+  $("pv_support").textContent = $("support_text").value;
+  const icon = $("icon_url").value.trim();
+  $("pv_logo").hidden = !icon; if (icon) $("pv_logo").src = icon;
+  $("pv_ico").innerHTML = icon ? `<img src="${icon}" alt="">` : initials(name);
+}
+fields.forEach(id => $(id).addEventListener("input", preview));
+$("color_pick").addEventListener("input", e => { $("primary_color").value = e.target.value.toUpperCase(); preview(); });
+$("app_name").addEventListener("input", () => {
+  // keep package id in step with the name until the user edits it by hand
+  if (!$("package_id").dataset.touched) $("package_id").value = "com." + ($("app_name").value.toLowerCase().replace(/[^a-z0-9]/g, "") || "brand") + ".tv";
+});
+$("package_id").addEventListener("input", e => e.target.dataset.touched = "1");
+preview();
+
+// ---- build + poll
+let poll = null;
+function setStatus(state, message) {
+  $("status").classList.add("show"); $("dot").className = "dot " + state; $("msg").textContent = message;
+}
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearInterval(poll); $("result").hidden = true; $("runlink").hidden = true;
+  const body = Object.fromEntries(fields.map(id => [id, $(id).value])); body.password = $("password").value;
+  $("go").disabled = true; setStatus("building", "Starting the build…");
+  const r = await fetch("/.netlify/functions/build", { method: "POST", body: JSON.stringify(body) }).then(r => r.json());
+  if (r.error) { setStatus("failed", r.error); $("go").disabled = false; return; }
+
+  let runId = null;
+  poll = setInterval(async () => {
+    const q = new URLSearchParams({ password: body.password, since: r.since }); if (runId) q.set("run_id", runId);
+    const s = await fetch("/.netlify/functions/status?" + q).then(r => r.json());
+    if (s.error) { setStatus("failed", s.error); clearInterval(poll); $("go").disabled = false; return; }
+    if (s.run_id) { runId = s.run_id; $("runlink").href = s.url; $("runlink").hidden = false; }
+    setStatus(s.state === "done" ? "done" : s.state === "failed" ? "failed" : "building",
+              s.state === "done" ? `Build #${s.run_number} finished (${s.size_mb} MB)` : s.message);
+    if (s.state === "done" || s.state === "failed") {
+      clearInterval(poll); $("go").disabled = false;
+      if (s.state === "done") {
+        $("result").hidden = false;
+        $("short").innerHTML = s.short ? `${s.short}<small>type this into Downloader</small>` : `Ready<small>add a BITLY_TOKEN to get a short code automatically</small>`;
+        $("dl").textContent = s.download; $("dl").href = s.download;
+      }
+    }
+  }, 8000);
+});
+</script>
+</body>
+</html>

@@ -10,6 +10,8 @@ class Branding {
   final String epgUrl;         // optional XMLTV url for M3U users
   final String vpnConfigUrl;   // optional .ovpn download url
   final String supportText;
+  final List<Portal> portals;  // pre-configured servers; if non-empty, login hides the raw host field
+  final String pairBaseUrl;    // base URL of the Netlify pairing functions, for code/QR sign-in
 
   const Branding({
     required this.appName,
@@ -18,7 +20,10 @@ class Branding {
     required this.epgUrl,
     required this.vpnConfigUrl,
     required this.supportText,
+    required this.portals,
+    required this.pairBaseUrl,
   });
+
 
   static Branding? _instance;
   static Branding get I => _instance!;
@@ -33,6 +38,11 @@ class Branding {
       epgUrl: j['epg_url'] ?? '',
       vpnConfigUrl: j['vpn_config_url'] ?? '',
       supportText: j['support_text'] ?? '',
+      portals: ((j['portals'] as List?) ?? [])
+          .map((p) => Portal(name: p['name'] ?? '', host: p['host'] ?? ''))
+          .where((p) => p.name.isNotEmpty && p.host.isNotEmpty)
+          .toList(),
+      pairBaseUrl: j['pair_base_url'] ?? '',
     );
   }
 
@@ -41,4 +51,10 @@ class Branding {
     if (h.length == 6) h = 'FF$h';
     return Color(int.parse(h, radix: 16));
   }
+}
+
+class Portal {
+  final String name;
+  final String host;
+  const Portal({required this.name, required this.host});
 }

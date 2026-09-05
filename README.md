@@ -70,3 +70,48 @@ tools/brand.py            stamps name/package/color/icon/banner into the project
   `app/pubspec.yaml` and delete `app/lib/ui/vpn_screen.dart` + its two references in `home_screen.dart`
   to get a clean build, then re-add once the plugin updates.
 - The player is legal on its own; what you point it at is your responsibility.
+
+## The dashboard (GhostAPK-style builder page)
+
+`web/` + `netlify/functions/` is a small site that puts a form and a live TV preview in
+front of the GitHub build. Host it on Netlify (free):
+
+1. Netlify → **Add new site → Import an existing project** → pick this repo.
+   Build command: *(leave empty)*. Publish directory: `web`. Deploy.
+2. On GitHub, make a **fine-grained personal access token** (Settings → Developer settings)
+   scoped to this one repo with **Actions: Read and write** and **Contents: Read**.
+3. Netlify → Site configuration → **Environment variables**, add:
+   - `GITHUB_TOKEN` — the token from step 2
+   - `GITHUB_REPO` — `Blkmaze/mazetv-builder`
+   - `BUILDER_PASSWORD` — anything you like; the page asks for it
+   - `BITLY_TOKEN` — optional (Bitly → Settings → API); if set, every build gets its own bit.ly code
+4. Redeploy once so the variables take effect.
+
+Then open the site, fill in a brand, click **Build APK**, and watch it go from
+"Starting" to a download link and short code in about 6–8 minutes. Each build is also
+published as a GitHub Release, so `releases/latest/download/…` always has the newest one.
+
+## Embedded servers + "sign in with a code"
+
+Two more ways to keep viewers away from typing a server URL:
+
+**Pre-configured server list.** Pass `portals` (a JSON list) to a build:
+```json
+[{"name":"Prada","host":"http://pradahype.com:33726"}, {"name":"CDN","host":"http://kytv.xyz"}]
+```
+The login screen then shows a **Server** dropdown of those names (plus "Other server…" as an
+escape hatch) instead of a URL field — viewers only ever type username and password. The
+dashboard and the GitHub workflow both default this to your 4 known providers; edit or clear
+it per build.
+
+**Sign in with a code.** Set `pair_base_url` to your Netlify site's own URL (e.g.
+`https://mazetv.netlify.app`) and the login screen gains a "Sign in with a code instead" link.
+On the TV it shows a 6-digit code; the viewer opens `<your-site>/pair.html` on their phone,
+types that code plus their login details once, and the TV signs itself in within a few
+seconds — no remote-control typing at all. This uses **Netlify Blobs** (`netlify/functions/pair-*.js`),
+which needs no extra setup beyond deploying the site; each code is single-use and expires
+in 10 minutes.
+
+This is the same shape GhostAPK's QR sign-in uses — a phone hands credentials to a small backend,
+the TV polls for them. A literal QR code (instead of typing a 6-digit number) is a small further
+step: generate one client-side on `pair.html` that encodes the same claim URL.

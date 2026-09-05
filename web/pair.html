@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in to MazeTV</title>
+<style>
+  :root { --bg:#1c2230; --panel:#262e3f; --line:#37405a; --text:#e8ecf2; --muted:#8b95a8; --brand:#e50914; --ok:#4cd97b; --bad:#ff6b6b; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; padding:24px; }
+  .card { width:100%; max-width:420px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:28px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  p.hint { color:var(--muted); margin:0 0 20px; }
+  label { display:block; font-weight:600; margin:14px 0 6px; }
+  input, select { width:100%; padding:11px 12px; border-radius:8px; border:1px solid var(--line); background:#1a2029; color:var(--text); font:inherit; }
+  button { width:100%; margin-top:20px; padding:13px; border:0; border-radius:10px; background:var(--brand); color:#fff; font:600 16px inherit; cursor:pointer; }
+  button:disabled { opacity:.55; }
+  .msg { margin-top:14px; font-size:14px; }
+  .msg.ok { color:var(--ok); } .msg.bad { color:var(--bad); }
+  .code-box { display:flex; gap:8px; }
+  .code-box input { text-align:center; font-size:22px; letter-spacing:4px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Sign in to your TV</h1>
+  <p class="hint">Enter the 6-digit code shown on your TV screen, then your login details.</p>
+  <form id="f">
+    <label>Code from TV</label>
+    <input id="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="123456" required>
+
+    <label>Type</label>
+    <select id="type"><option value="xtream">Xtream (server + username + password)</option><option value="m3u">M3U playlist link</option></select>
+
+    <div id="xtream-fields">
+      <label>Server URL</label>
+      <input id="host" placeholder="http://host:port" required>
+      <label>Username</label>
+      <input id="username" required>
+      <label>Password</label>
+      <input id="password" type="password" required>
+    </div>
+    <div id="m3u-fields" style="display:none">
+      <label>Playlist URL</label>
+      <input id="m3u_host" placeholder="http://…/playlist.m3u8">
+    </div>
+
+    <button type="submit" id="go">Send to TV</button>
+    <div class="msg" id="msg"></div>
+  </form>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+$("type").addEventListener("change", e => {
+  const isM3u = e.target.value === "m3u";
+  $("xtream-fields").style.display = isM3u ? "none" : "block";
+  $("m3u-fields").style.display = isM3u ? "block" : "none";
+  for (const id of ["host","username","password"]) $(id).required = !isM3u;
+  $("m3u_host").required = isM3u;
+});
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("go").disabled = true; $("msg").textContent = "";
+  const type = $("type").value;
+  const body = { code: $("code").value.trim(), type,
+    host: type === "m3u" ? $("m3u_host").value.trim() : $("host").value.trim(),
+    username: $("username").value.trim(), password: $("password").value.trim() };
+  try {
+    const r = await fetch("/.netlify/functions/pair-claim", { method: "POST", body: JSON.stringify(body) }).then(r => r.json());
+    if (r.error) throw new Error(r.error);
+    $("msg").className = "msg ok"; $("msg").textContent = "Sent — your TV should sign in within a few seconds.";
+  } catch (err) {
+    $("msg").className = "msg bad"; $("msg").textContent = err.message;
+  } finally { $("go").disabled = false; }
+});
+</script>
+</body>
+</html>

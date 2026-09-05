@@ -3,6 +3,7 @@ import '../config/branding.dart';
 import '../models/account.dart';
 import '../services/channel_repo.dart';
 import '../services/storage.dart';
+import 'code_signin_screen.dart';
 import 'home_screen.dart';
 import 'tv_widgets.dart';
 
@@ -20,14 +21,34 @@ class _LoginScreenState extends State<LoginScreen> {
   final m3u = TextEditingController();
   final epg = TextEditingController(text: Branding.I.epgUrl);
   bool busy = false;
+  bool manualHost = false; // "Other server" was picked from the provider list
+  Portal? picked;
+
+  @override
+  void initState() {
+    super.initState();
+    final portals = Branding.I.portals;
+    if (portals.isNotEmpty) { picked = portals.first; host.text = picked!.host; }
+  }
 
   Future<void> _go() async {
     setState(() => busy = true);
     try {
-      final a = mode == SourceType.xtream
+      var a = mode == SourceType.xtream
           ? Account(type: SourceType.xtream, host: _norm(host.text), username: user.text.trim(), password: pass.text.trim(), epgUrl: epg.text.trim())
           : Account(type: SourceType.m3u, host: m3u.text.trim(), epgUrl: epg.text.trim());
-      await ChannelRepo.I.load(a, fallbackEpg: Branding.I.epgUrl);
+      try {
+        await ChannelRepo.I.load(a, fallbackEpg: Branding.I.epgUrl);
+      } catch (e) {
+        // Most portals are plain http; if the user typed https and it refused, retry once on http.
+        if (mode == SourceType.xtream && a.host.startsWith('https://') && e.toString().contains('Could not reach')) {
+          a = Account(type: a.type, host: a.host.replaceFirst('https://', 'http://'),
+              username: a.username, password: a.password, epgUrl: a.epgUrl);
+          await ChannelRepo.I.load(a, fallbackEpg: Branding.I.epgUrl);
+        } else {
+          rethrow;
+        }
+      }
       await Storage.saveAccount(a);
       if (!mounted) return;
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
@@ -47,6 +68,8 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final b = Branding.I;
+    final hasPortals = b.portals.isNotEmpty;
+    final hasPairing = b.pairBaseUrl.isNotEmpty;
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -67,18 +90,43 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 24),
               if (mode == SourceType.xtream) ...[
-                _field(host, 'Server URL (http://host:port)', autofocus: true),
-                _field(user, 'Username'),
-                _field(pass, 'Password', obscure: true),
+                if (hasPortals) ...[
+                  DropdownButtonFormField<Portal?>(
+                    initialValue: manualHost ? null : picked,
+                    decoration: const InputDecoration(labelText: 'Server', border: OutlineInputBorder()),
+                    dropdownColor: const Color(0xFF20242f),
+                    items: [
+                      for (final p in b.portals) DropdownMenuItem(value: p, child: Text(p.name)),
+                      const DropdownMenuItem(value: null, child: Text('Other server…')),
+                    ],
+                    onChanged: (p) => setState(() {
+                      if (p == null) { manualHost = true; host.text = ''; }
+                      else { manualHost = false; picked = p; host.text = p.host; }
+                    }),
+                  ),
+                  const SizedBox(height: 14),
+                  if (manualHost) TvTextField(controller: host, label: 'Server URL (http://host:port)', autofocus: true),
+                ] else
+                  TvTextField(controller: host, label: 'Server URL (http://host:port)', autofocus: true),
+                TvTextField(controller: user, label: 'Username', autofocus: hasPortals && !manualHost),
+                TvTextField(controller: pass, label: 'Password', obscure: true),
               ] else ...[
-                _field(m3u, 'Playlist URL (.m3u / .m3u8)', autofocus: true),
+                TvTextField(controller: m3u, label: 'Playlist URL (.m3u / .m3u8)', autofocus: true),
               ],
-              _field(epg, 'EPG URL (optional XMLTV)', last: true),
+              TvTextField(controller: epg, label: 'EPG URL (optional XMLTV)', last: true),
               const SizedBox(height: 20),
               busy
                   ? const Center(child: CircularProgressIndicator())
                   : TvButton(label: 'Sign in', icon: Icons.play_arrow, onPressed: _go),
-              const SizedBox(height: 20),
+              if (hasPairing) ...[
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CodeSignInScreen())),
+                  icon: const Icon(Icons.qr_code, color: Colors.white70),
+                  label: const Text('Sign in with a code instead', style: TextStyle(color: Colors.white70)),
+                ),
+              ],
+              const SizedBox(height: 8),
               Text(b.supportText, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54)),
             ]),
           ),
@@ -86,16 +134,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
-  Widget _field(TextEditingController c, String label, {bool obscure = false, bool autofocus = false, bool last = false}) => Padding(
-        padding: const EdgeInsets.only(bottom: 14),
-        child: TvTextField(
-          controller: c,
-          label: label,
-          obscureText: obscure,
-          autofocus: autofocus,
-          textInputAction: last ? TextInputAction.done : TextInputAction.next,
-          onSubmitted: last ? _go : null,
-        ),
-      );
 }
