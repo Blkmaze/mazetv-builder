@@ -28,8 +28,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _refresh() async {
     setState(() => refreshing = true);
     try {
-      final a = await Storage.loadAccount();
-      if (a != null) await ChannelRepo.I.load(a, fallbackEpg: Branding.I.epgUrl);
+      final servers = await Storage.loadServers();
+      if (servers.isNotEmpty) await ChannelRepo.I.loadFailover(servers, fallbackEpg: Branding.I.epgUrl);
       ChannelRepo.I.loadEpg();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

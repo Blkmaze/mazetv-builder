@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../config/branding.dart';
 import '../models/account.dart';
+import '../models/server_config.dart';
 import '../services/channel_repo.dart';
 import '../services/storage.dart';
 import 'home_screen.dart';
@@ -54,7 +55,18 @@ class _CodeSignInScreenState extends State<CodeSignInScreen> {
       );
       setState(() => status = 'Signing in…');
       await ChannelRepo.I.load(a, fallbackEpg: Branding.I.epgUrl);
-      await Storage.saveAccount(a);
+
+      final server = ServerConfig(
+        id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
+        nickname: a.type == SourceType.xtream
+            ? a.host.replaceFirst(RegExp(r'^https?://'), '').split('/').first
+            : 'M3U playlist',
+        account: a,
+      );
+      await Storage.addServer(server);
+      await Storage.setActiveServerId(server.id);
+      ChannelRepo.I.activeServer = server;
+
       if (!mounted) return;
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
     } catch (e) {

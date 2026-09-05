@@ -12,6 +12,8 @@ class Branding {
   final String supportText;
   final List<Portal> portals;  // pre-configured servers; if non-empty, login hides the raw host field
   final String pairBaseUrl;    // base URL of the Netlify pairing functions, for code/QR sign-in
+  final String repo;           // "owner/name" this build was published from, for OTA checks
+  final int buildNumber;       // this build's GitHub Actions run number
 
   const Branding({
     required this.appName,
@@ -22,6 +24,8 @@ class Branding {
     required this.supportText,
     required this.portals,
     required this.pairBaseUrl,
+    this.repo = '',
+    this.buildNumber = 0,
   });
 
 
@@ -43,6 +47,8 @@ class Branding {
           .where((p) => p.name.isNotEmpty && p.host.isNotEmpty)
           .toList(),
       pairBaseUrl: j['pair_base_url'] ?? '',
+      repo: j['repo'] ?? '',
+      buildNumber: (j['build_number'] as num?)?.toInt() ?? 0,
     );
   }
 

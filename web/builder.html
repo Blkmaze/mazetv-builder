@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MazeTV Builder</title>
+<style>
+  :root {
+    --bg: #0e0e10;
+    --panel: #1a1a1e;
+    --border: #2c2c31;
+    --text: #f2f2f3;
+    --muted: #9a9aa2;
+    --accent: #e50914;
+    --ok: #2ecc71;
+    --warn: #f1c40f;
+    --err: #ff5b5b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h1 span { color: var(--accent); }
+  p.lead { color: var(--muted); margin-top: 0; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 14px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  label:first-child { margin-top: 0; }
+  input[type=text], input[type=password], input[type=url] {
+    width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: #101013; color: var(--text); font-size: 14px;
+  }
+  input:focus { outline: 2px solid var(--accent); }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  button {
+    background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 18px;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  button.secondary { background: #2c2c31; }
+  .status { margin-top: 16px; padding: 14px; border-radius: 8px; background: #101013; border: 1px solid var(--border); font-size: 14px; }
+  .status .line { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .dot.active { background: var(--warn); animation: pulse 1.2s infinite; }
+  .dot.ok { background: var(--ok); }
+  .dot.err { background: var(--err); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .result { display: none; }
+  .result.show { display: block; }
+  .link-box {
+    display: flex; gap: 8px; margin-top: 10px; align-items: center;
+    background: #101013; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;
+  }
+  .link-box code { flex: 1; word-break: break-all; font-size: 13px; color: var(--ok); }
+  .link-box button { margin: 0; padding: 8px 12px; font-size: 13px; }
+  a.dl { color: var(--accent); }
+  .err-box { color: var(--err); background: #2a1414; border: 1px solid #4a1f1f; border-radius: 6px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 30px; }
+  details { color: var(--muted); font-size: 13px; }
+  details summary { cursor: pointer; color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Maze<span>TV</span> Builder</h1>
+  <p class="lead">Fills in the same GitHub Actions form as before, but from one page — for your own builds only.
+  This page talks directly to <code>api.github.com</code> using a token you paste in below; nothing is sent anywhere else, and the token only ever lives in this browser's local storage.</p>
+
+  <div class="card">
+    <h2>1 · GitHub access</h2>
+    <label for="owner">Repo owner / name</label>
+    <input type="text" id="repo" value="Blkmaze/mazetv-builder">
+    <label for="token">Personal access token</label>
+    <input type="password" id="token" placeholder="ghp_...">
+    <p class="hint">
+      <a class="dl" href="https://github.com/settings/tokens/new?description=mazetv-builder&scopes=repo,workflow" target="_blank" rel="noopener">Create one</a>
+      with the <code>repo</code> and <code>workflow</code> scopes (classic token) — or a fine-grained token scoped to this repo
+      with Actions: Read/Write and Contents: Read. Stored only in this browser (localStorage), used only for requests to github.com.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>2 · Brand this build</h2>
+    <label>App name</label>
+    <input type="text" id="app_name" value="Maze TV">
+    <label>Package id (unique per brand, lowercase)</label>
+    <input type="text" id="package_id" value="com.mazetv.player">
+    <div class="row">
+      <div>
+        <label>Primary color</label>
+        <input type="text" id="primary_color" value="#E50914">
+      </div>
+      <div>
+        <label>Icon URL (optional, 512×512 PNG)</label>
+        <input type="url" id="icon_url" placeholder="https://...">
+      </div>
+    </div>
+    <label>Portal URL (optional, pre-fills Xtream login)</label>
+    <input type="text" id="portal_url" placeholder="http://portal.example.com:8080">
+    <label>Default EPG URL (optional, XMLTV — for M3U users)</label>
+    <input type="url" id="epg_url" placeholder="https://.../xmltv.xml">
+    <label>VPN profile URL (optional, .ovpn)</label>
+    <input type="url" id="vpn_url" placeholder="https://.../profile.ovpn">
+    <label>Support text</label>
+    <input type="text" id="support_text" value="Contact your provider for login details.">
+    <button id="buildBtn">Build APK</button>
+    <button id="clearBtn" class="secondary" type="button">Clear saved token</button>
+  </div>
+
+  <div class="card result" id="statusCard">
+    <h2>3 · Build status</h2>
+    <div class="status" id="statusBox">
+      <div class="line"><span class="dot" id="dotDispatch"></span><span id="txtDispatch">Dispatching workflow…</span></div>
+      <div class="line"><span class="dot" id="dotRun"></span><span id="txtRun">Waiting for the run to start…</span></div>
+      <div class="line"><span class="dot" id="dotBuild"></span><span id="txtBuild">Building &amp; signing APK…</span></div>
+      <div class="line"><span class="dot" id="dotRelease"></span><span id="txtRelease">Publishing release…</span></div>
+    </div>
+    <div id="errBox"></div>
+    <div id="downloadBox"></div>
+    <p class="hint" id="runLinkHint"></p>
+  </div>
+
+  <details>
+    <summary>What this page does under the hood</summary>
+    <p>On "Build APK" it POSTs to <code>/repos/&lt;owner&gt;/&lt;repo&gt;/actions/workflows/build-apk.yml/dispatches</code>
+    with your field values as inputs (same inputs the Actions "Run workflow" form takes), then polls
+    <code>/actions/runs</code> for the newest matching run until it finishes, then reads the matching GitHub
+    Release (tag <code>build-&lt;run number&gt;</code>) to find the signed APK's direct download URL. No server, no
+    database, no third party — just your browser and GitHub's API.</p>
+  </details>
+
+  <footer>Personal build tool for your own MazeTV APKs — not a hosted service.</footer>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const FIELDS = ['repo', 'token', 'app_name', 'package_id', 'primary_color', 'icon_url', 'portal_url', 'epg_url', 'vpn_url', 'support_text'];
+  const STORE_KEY = 'mazetv_builder_form_v1';
+
+  // Restore saved form values (token included — this page never leaves your machine).
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    for (const f of FIELDS) if (saved[f] !== undefined) $(f).value = saved[f];
+  } catch (_) {}
+
+  function persist() {
+    const data = {};
+    for (const f of FIELDS) data[f] = $(f).value;
+    localStorage.setItem(STORE_KEY, JSON.stringify(data));
+  }
+  FIELDS.forEach((f) => $(f).addEventListener('input', persist));
+
+  $('clearBtn').addEventListener('click', () => {
+    localStorage.removeItem(STORE_KEY);
+    $('token').value = '';
+  });
+
+  function setDot(id, state) {
+    const d = $(id);
+    d.className = 'dot' + (state ? ' ' + state : '');
+  }
+  function setLine(txtId, text) { $(txtId).textContent = text; }
+  function showError(msg) {
+    $('errBox').innerHTML = '<div class="err-box">' + escapeHtml(msg) + '</div>';
+  }
+  function clearError() { $('errBox').innerHTML = ''; }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  async function gh(path, opts) {
+    const token = $('token').value.trim();
+    const res = await fetch('https://api.github.com' + path, Object.assign({
+      headers: Object.assign({
+        'Accept': 'application/vnd.github+json',
+        'Authorization': 'Bearer ' + token,
+        'X-GitHub-Api-Version': '2022-11-28',
+      }, (opts && opts.headers) || {}),
+    }, opts));
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json()).message; } catch (_) {}
+      throw new Error('GitHub API ' + res.status + (detail ? ': ' + detail : '') + ' (' + path + ')');
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+  $('buildBtn').addEventListener('click', async () => {
+    clearError();
+    const repo = $('repo').value.trim();
+    const token = $('token').value.trim();
+    if (!repo.includes('/')) return showError('Repo must look like owner/name.');
+    if (!token) return showError('Paste a GitHub personal access token first.');
+
+    const inputs = {
+      app_name: $('app_name').value.trim() || 'Maze TV',
+      package_id: $('package_id').value.trim() || 'com.mazetv.player',
+      primary_color: $('primary_color').value.trim() || '#E50914',
+      portal_url: $('portal_url').value.trim(),
+      epg_url: $('epg_url').value.trim(),
+      vpn_url: $('vpn_url').value.trim(),
+      support_text: $('support_text').value.trim(),
+      icon_url: $('icon_url').value.trim(),
+    };
+
+    $('buildBtn').disabled = true;
+    $('statusCard').classList.add('show');
+    $('downloadBox').innerHTML = '';
+    $('runLinkHint').textContent = '';
+    ['dotDispatch', 'dotRun', 'dotBuild', 'dotRelease'].forEach((d) => setDot(d, ''));
+    setDot('dotDispatch', 'active');
+
+    try {
+      const before = new Date(Date.now() - 15000).toISOString();
+
+      await gh('/repos/' + repo + '/actions/workflows/build-apk.yml/dispatches', {
+        method: 'POST',
+        body: JSON.stringify({ ref: 'main', inputs }),
+      });
+      setDot('dotDispatch', 'ok');
+      setLine('txtDispatch', 'Workflow dispatched.');
+      setDot('dotRun', 'active');
+
+      // Find the run GitHub just created for this dispatch.
+      let run = null;
+      for (let i = 0; i < 20 && !run; i++) {
+        await sleep(3000);
+        const runs = await gh('/repos/' + repo + '/actions/workflows/build-apk.yml/runs?event=workflow_dispatch&per_page=5');
+        run = (runs.workflow_runs || []).find((r) => r.created_at >= before) || null;
+      }
+      if (!run) throw new Error('Timed out waiting for the run to appear in Actions — check the Actions tab.');
+      setDot('dotRun', 'ok');
+      setLine('txtRun', 'Run #' + run.run_number + ' started.');
+      $('runLinkHint').innerHTML = 'Live logs: <a class="dl" href="' + run.html_url + '" target="_blank" rel="noopener">' + run.html_url + '</a>';
+      setDot('dotBuild', 'active');
+
+      // Poll until the run finishes.
+      let finished = run;
+      while (finished.status !== 'completed') {
+        await sleep(6000);
+        finished = await gh('/repos/' + repo + '/actions/runs/' + run.id);
+      }
+      if (finished.conclusion !== 'success') {
+        setDot('dotBuild', 'err');
+        throw new Error('Build finished with status "' + finished.conclusion + '". Check the run logs above.');
+      }
+      setDot('dotBuild', 'ok');
+      setLine('txtBuild', 'Build succeeded.');
+      setDot('dotRelease', 'active');
+
+      // The workflow tags the release build-<run_number>.
+      const release = await gh('/repos/' + repo + '/releases/tags/build-' + run.run_number);
+      const asset = (release.assets || [])[0];
+      if (!asset) throw new Error('Run succeeded but no release asset was found for build-' + run.run_number + '.');
+      setDot('dotRelease', 'ok');
+      setLine('txtRelease', 'Release published.');
+
+      $('downloadBox').innerHTML =
+        '<div class="link-box"><code id="dlUrl">' + escapeHtml(asset.browser_download_url) + '</code>' +
+        '<button type="button" id="copyBtn">Copy</button></div>' +
+        '<p class="hint">Open this URL in Downloader on your Fire TV / Android TV (or <code>adb install</code> it) to sideload <strong>' + escapeHtml(asset.name) + '</strong>.</p>';
+      $('copyBtn').addEventListener('click', () => {
+        navigator.clipboard.writeText(asset.browser_download_url);
+        $('copyBtn').textContent = 'Copied';
+        setTimeout(() => { $('copyBtn').textContent = 'Copy'; }, 1500);
+      });
+    } catch (e) {
+      showError(e.message || String(e));
+    } finally {
+      $('buildBtn').disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

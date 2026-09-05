@@ -1,10 +1,13 @@
 import '../models/account.dart';
 import '../models/channel.dart';
+import '../models/server_config.dart';
 import 'epg_service.dart';
 import 'm3u_service.dart';
 import 'xtream_service.dart';
 
-/// One place that knows how to turn an Account into channels + EPG.
+/// One place that knows how to turn an Account into channels + EPG, and how
+/// to fail over across a prioritized list of [ServerConfig]s when one is
+/// down.
 class ChannelRepo {
   static final ChannelRepo I = ChannelRepo._();
   ChannelRepo._();
@@ -12,6 +15,9 @@ class ChannelRepo {
   List<Channel> channels = [];
   final EpgService epg = EpgService();
   String epgUrl = '';
+
+  /// The server that actually served [channels], once [loadFailover] succeeds.
+  ServerConfig? activeServer;
 
   Future<void> load(Account a, {String fallbackEpg = ''}) async {
     if (a.type == SourceType.xtream) {
@@ -24,6 +30,30 @@ class ChannelRepo {
       channels = r.channels;
       epgUrl = a.epgUrl.isNotEmpty ? a.epgUrl : (r.epgUrl.isNotEmpty ? r.epgUrl : fallbackEpg);
     }
+  }
+
+  /// Tries each enabled server in priority order (lowest first) until one
+  /// loads successfully. Throws with every server's error attached if all of
+  /// them fail.
+  Future<void> loadFailover(List<ServerConfig> servers, {String fallbackEpg = ''}) async {
+    final ordered = servers.where((s) => s.enabled).toList()
+      ..sort((a, b) => a.priority.compareTo(b.priority));
+    if (ordered.isEmpty) {
+      throw Exception(servers.isEmpty ? 'No servers configured.' : 'All servers are disabled.');
+    }
+
+    final failures = <String>[];
+    for (final s in ordered) {
+      try {
+        await load(s.account, fallbackEpg: fallbackEpg);
+        activeServer = s;
+        return;
+      } catch (e) {
+        failures.add('${s.nickname}: ${e.toString().replaceFirst('Exception: ', '')}');
+      }
+    }
+    activeServer = null;
+    throw Exception('All servers failed —\n${failures.join('\n')}');
   }
 
   /// Fire-and-forget; UI listens via [onEpgLoaded].

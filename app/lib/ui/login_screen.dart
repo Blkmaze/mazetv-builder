@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import '../config/branding.dart';
 import '../models/account.dart';
+import '../models/server_config.dart';
 import '../services/channel_repo.dart';
 import '../services/storage.dart';
 import 'code_signin_screen.dart';
 import 'home_screen.dart';
 import 'tv_widgets.dart';
 
+/// First-run screen: adds your one and only server to start with. Extra
+/// servers (for failover) are added later from Home → Servers.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -49,7 +52,16 @@ class _LoginScreenState extends State<LoginScreen> {
           rethrow;
         }
       }
-      await Storage.saveAccount(a);
+
+      final server = ServerConfig(
+        id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
+        nickname: mode == SourceType.xtream ? _hostLabel(a.host) : 'M3U playlist',
+        account: a,
+      );
+      await Storage.addServer(server);
+      await Storage.setActiveServerId(server.id);
+      ChannelRepo.I.activeServer = server;
+
       if (!mounted) return;
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
     } catch (e) {
@@ -64,6 +76,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!s.startsWith('http')) s = 'http://$s';
     return s;
   }
+
+  static String _hostLabel(String host) => host.replaceFirst(RegExp(r'^https?://'), '').split('/').first;
 
   @override
   Widget build(BuildContext context) {

@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../config/branding.dart';
 import '../models/channel.dart';
+import '../models/profile.dart';
 import '../services/channel_repo.dart';
+import '../services/ota_service.dart';
 import '../services/storage.dart';
 import 'guide_screen.dart';
 import 'login_screen.dart';
-import 'settings_screen.dart';
 import 'player_screen.dart';
+import 'profiles_screen.dart';
+import 'servers_screen.dart';
+import 'settings_screen.dart';
 import 'tv_widgets.dart';
+
+const String kFavoritesGroup = '★ Favorites';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +27,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool loading = true;
   String? group;
   String search = '';
+  String? activeProfileId;
+  Set<String> favorites = {};
 
   @override
   void initState() {
@@ -28,19 +37,68 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _boot() async {
+    setState(() => loading = true);
     try {
       if (repo.channels.isEmpty) {
-        final a = await Storage.loadAccount();
-        if (a == null) { _logout(); return; }
-        await repo.load(a, fallbackEpg: Branding.I.epgUrl);
+        final servers = await Storage.loadServers();
+        if (servers.isEmpty) { _logout(); return; }
+        await repo.loadFailover(servers, fallbackEpg: Branding.I.epgUrl);
       }
+
+      final profiles = await Storage.loadProfiles();
+      if (profiles.length > 1 && mounted) {
+        final chosen = await Navigator.push<Profile>(
+          context,
+          MaterialPageRoute<Profile>(builder: (_) => const ProfilesScreen()),
+        );
+        if (chosen != null) activeProfileId = chosen.id;
+      }
+      activeProfileId ??= await Storage.activeProfileId();
+      favorites = await Storage.favorites(activeProfileId);
+
       group = repo.groups.isEmpty ? null : repo.groups.first;
+      if (!mounted) return;
       setState(() => loading = false);
       repo.loadEpg().then((_) { if (mounted) setState(() {}); });
+      _checkForUpdate();
     } catch (e) {
+      // Don't wipe a working server list just because it's briefly
+      // unreachable — send them to Servers to fix/retry instead of forcing
+      // a full re-login every time every server is down at once.
       if (!mounted) return;
       await showError(context, e);
-      _logout();
+      if (!mounted) return;
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => const ServersScreen()));
+      repo.channels = [];
+      _boot();
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final update = await OtaService.check();
+      if (update == null || !mounted) return;
+      final skipped = await Storage.otaSkippedBuild();
+      if (skipped == update.build) return;
+      if (!mounted) return;
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Update available'),
+          content: Text('A newer build of ${Branding.I.appName} is ready (build ${update.build}).'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, 'skip'), child: const Text('Skip this version')),
+            TextButton(onPressed: () => Navigator.pop(context, 'later'), child: const Text('Later')),
+            TextButton(onPressed: () => Navigator.pop(context, 'update'), child: const Text('Update now')),
+          ],
+        ),
+      );
+      if (choice == 'skip') await Storage.setOtaSkippedBuild(update.build);
+      if (choice == 'update') {
+        await launchUrl(Uri.parse(update.downloadUrl), mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      // OTA check is best-effort; never interrupt normal use over it.
     }
   }
 
@@ -51,6 +109,31 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
   }
 
+  Future<void> _openServers() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ServersScreen()));
+    repo.channels = [];
+    _boot();
+  }
+
+  Future<void> _openProfiles() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilesScreen(selecting: false)));
+    activeProfileId = await Storage.activeProfileId();
+    favorites = await Storage.favorites(activeProfileId);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleFavorite(Channel c) async {
+    setState(() {
+      if (!favorites.remove(c.id)) favorites.add(c.id);
+    });
+    await Storage.setFavorites(activeProfileId, favorites);
+  }
+
   void _play(List<Channel> list, int index) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(playlist: list, index: index)));
   }
@@ -58,52 +141,74 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    final groups = repo.groups;
-    final channels = search.isEmpty
-        ? (group == null ? repo.channels : repo.inGroup(group!))
-        : repo.channels.where((c) => c.name.toLowerCase().contains(search.toLowerCase())).toList();
+    final groups = [kFavoritesGroup, ...repo.groups];
+    List<Channel> channels;
+    if (search.isNotEmpty) {
+      channels = repo.channels.where((c) => c.name.toLowerCase().contains(search.toLowerCase())).toList();
+    } else if (group == kFavoritesGroup || group == null) {
+      channels = repo.channels.where((c) => favorites.contains(c.id)).toList();
+    } else {
+      channels = repo.inGroup(group!);
+    }
 
     return Scaffold(
-      body: Row(children: [
-        // ---- left rail: menu + categories
-        SizedBox(
-          width: 300,
-          child: Column(children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-              child: Text(Branding.I.appName,
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Branding.I.primaryColor)),
-            ),
-            TvTile(leading: const Icon(Icons.grid_view), title: const Text('TV Guide'),
-                onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GuideScreen()))),
-            TvTile(leading: const Icon(Icons.search), title: const Text('Search'), onSelect: _openSearch),
-            TvTile(leading: const Icon(Icons.settings), title: const Text('Settings'),
-                onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
-            const Divider(),
-            Expanded(
-              child: ListView.builder(
-                itemCount: groups.length,
-                itemBuilder: (_, i) => TvTile(
-                  autofocus: i == 0,
-                  selected: groups[i] == group && search.isEmpty,
-                  title: Text(groups[i], maxLines: 1, overflow: TextOverflow.ellipsis),
-                  trailing: Text('${repo.inGroup(groups[i]).length}', style: const TextStyle(color: Colors.white38)),
-                  onSelect: () => setState(() { group = groups[i]; search = ''; }),
-                ),
-              ),
-            ),
+      body: Column(children: [
+        // ---- top brand bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+            Text(Branding.I.appName,
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Branding.I.primaryColor)),
+            if (repo.activeServer != null) ...[
+              const SizedBox(width: 14),
+              Text('via ${repo.activeServer!.nickname}', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+            ],
           ]),
         ),
-        const VerticalDivider(width: 1),
-        // ---- right: channel list
+        const Divider(height: 1),
         Expanded(
-          child: channels.isEmpty
-              ? const Center(child: Text('No channels'))
+          child: Row(children: [
+            // ---- collapsible icon nav (expands to labels while focus is inside it)
+            TvNavRail(itemsBuilder: (expanded) => [
+              const SizedBox(height: 8),
+              TvRailTile(icon: Icons.grid_view, label: 'TV Guide', expanded: expanded,
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GuideScreen()))),
+              TvRailTile(icon: Icons.dns, label: 'Servers', expanded: expanded, onSelect: _openServers),
+              TvRailTile(icon: Icons.people, label: 'Profiles', expanded: expanded, onSelect: _openProfiles),
+              TvRailTile(icon: Icons.search, label: 'Search', expanded: expanded, onSelect: _openSearch),
+              TvRailTile(icon: Icons.settings, label: 'Settings', expanded: expanded, onSelect: _openSettings),
+            ]),
+            const VerticalDivider(width: 1),
+            // ---- categories (always visible, its own column)
+            SizedBox(
+              width: 260,
+              child: ListView.builder(
+                itemCount: groups.length,
+                itemBuilder: (_, i) {
+                  final isFav = groups[i] == kFavoritesGroup;
+                  final count = isFav ? favorites.length : repo.inGroup(groups[i]).length;
+                  return TvTile(
+                    autofocus: i == 0,
+                    selected: groups[i] == group && search.isEmpty,
+                    leading: isFav ? const Icon(Icons.star, color: Colors.amber, size: 18) : null,
+                    title: Text(groups[i], maxLines: 1, overflow: TextOverflow.ellipsis),
+                    trailing: Text('$count', style: const TextStyle(color: Colors.white38)),
+                    onSelect: () => setState(() { group = groups[i]; search = ''; }),
+                  );
+                },
+              ),
+            ),
+            const VerticalDivider(width: 1),
+            // ---- channel list
+            Expanded(
+              child: channels.isEmpty
+              ? Center(child: Text(group == kFavoritesGroup ? 'No favorites yet — hold OK on a channel to add one' : 'No channels'))
               : ListView.builder(
                   itemCount: channels.length,
                   itemBuilder: (_, i) {
                     final c = channels[i];
                     final now = repo.epg.nowPlaying(c.epgId);
+                    final isFav = favorites.contains(c.id);
                     return TvTile(
                       leading: SizedBox(
                         width: 74,
@@ -118,10 +223,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       subtitle: now == null ? null
                           : Text('${_hm(now.start)}–${_hm(now.stop)}  ${now.title}',
                               maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60)),
+                      trailing: isFav ? const Icon(Icons.star, color: Colors.amber) : null,
                       onSelect: () => _play(channels, i),
+                      onLongSelect: () => _toggleFavorite(c),
                     );
                   },
                 ),
+            ),
+          ]),
         ),
       ]),
     );

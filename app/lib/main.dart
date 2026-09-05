@@ -9,8 +9,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   await Branding.load();
-  final acct = await Storage.loadAccount();
-  runApp(MazeTvApp(startLoggedIn: acct != null));
+  final servers = await Storage.loadServers();
+  runApp(MazeTvApp(startLoggedIn: servers.isNotEmpty));
 }
 
 class MazeTvApp extends StatelessWidget {

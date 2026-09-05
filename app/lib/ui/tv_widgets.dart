@@ -8,6 +8,8 @@ class TvTile extends StatelessWidget {
   final Widget? leading;
   final Widget? trailing;
   final VoidCallback onSelect;
+  final VoidCallback? onLongSelect;
+  final ValueChanged<bool>? onFocusChange;
   final bool autofocus;
   final bool selected;
 
@@ -15,6 +17,8 @@ class TvTile extends StatelessWidget {
     super.key,
     required this.title,
     required this.onSelect,
+    this.onLongSelect,
+    this.onFocusChange,
     this.subtitle,
     this.leading,
     this.trailing,
@@ -48,8 +52,10 @@ class TvTile extends StatelessWidget {
                 }
               });
             }
+            onFocusChange?.call(has);
           },
           onTap: onSelect,
+          onLongPress: onLongSelect,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             decoration: BoxDecoration(
@@ -70,6 +76,112 @@ class TvTile extends StatelessWidget {
           ),
         );
       }),
+    );
+  }
+}
+
+/// One entry in a collapsible icon nav rail (see [TvNavRail]) — just an
+/// icon when collapsed, icon + label when expanded.
+class TvRailTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool expanded;
+  final VoidCallback onSelect;
+  final bool autofocus;
+  final bool selected;
+
+  const TvRailTile({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.expanded,
+    required this.onSelect,
+    this.autofocus = false,
+    this.selected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      child: Builder(builder: (ctx) {
+        final focused = Focus.of(ctx).hasFocus;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              autofocus: autofocus,
+              onTap: onSelect,
+              borderRadius: BorderRadius.circular(8),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: focused
+                      ? primary.withOpacity(0.85)
+                      : selected
+                          ? Colors.white.withOpacity(0.08)
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(children: [
+                  Icon(icon, color: focused ? Colors.white : Colors.white70, size: 22),
+                  if (expanded) ...[
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: focused ? Colors.white : Colors.white70, fontSize: 16)),
+                    ),
+                  ],
+                ]),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+/// A vertical icon rail that expands to show labels while D-pad focus is
+/// anywhere inside it, and collapses back to icon-only once focus moves on
+/// (e.g. into the categories list or channel grid) — like a typical TV app's
+/// side nav.
+class TvNavRail extends StatefulWidget {
+  final List<Widget> Function(bool expanded) itemsBuilder;
+  const TvNavRail({super.key, required this.itemsBuilder});
+
+  @override
+  State<TvNavRail> createState() => _TvNavRailState();
+}
+
+class _TvNavRailState extends State<TvNavRail> {
+  bool expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (has) => setState(() => expanded = has),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        width: expanded ? 220 : 76,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: widget.itemsBuilder(expanded),
+          ),
+        ),
+      ),
     );
   }
 }
