@@ -35,7 +35,7 @@ class _TvTileState extends State<TvTile> {
   Timer? _holdTimer;
   bool _longFired = false;
 
-  static const _activateKeys = {
+  static final _activateKeys = {
     LogicalKeyboardKey.select, LogicalKeyboardKey.enter, LogicalKeyboardKey.numpadEnter,
     LogicalKeyboardKey.gameButtonA, LogicalKeyboardKey.space,
   };
