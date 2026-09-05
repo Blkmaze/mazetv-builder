@@ -1,6 +1,7 @@
 import '../models/account.dart';
 import '../models/channel.dart';
 import '../models/server_config.dart';
+import '../models/vod.dart';
 import 'epg_service.dart';
 import 'm3u_service.dart';
 import 'xtream_service.dart';
@@ -66,27 +67,85 @@ class ChannelRepo {
     }
   }
 
-  /// Groups with English-speaking country categories (USA, UK, Canada,
-  /// Australia, New Zealand, Ireland) surfaced first, since that's what
-  /// most viewers on this build are looking for — everything else keeps
-  /// its original relative order after that.
-  static const _priorityPrefixes = [
-    'USA', 'US ', 'US:', 'UK ', 'UK:', 'GB ', 'CANADA', 'AUSTRALIA', 'AU ',
-    'NEW ZEALAND', 'NZ ', 'IRELAND', 'IE ',
-  ];
+  /// Groups with English-speaking country categories surfaced first — USA
+  /// ranked above UK, which ranks above the rest — since that's what most
+  /// viewers on this build are looking for. Everything else keeps its
+  /// original relative order after that. Lower rank = shown first.
+  static const _priorityRanks = <String, int>{
+    'USA': 0, 'US ': 0, 'US:': 0,
+    'UK ': 1, 'UK:': 1, 'GB ': 1,
+    'CANADA': 2,
+    'AUSTRALIA': 3, 'AU ': 3,
+    'NEW ZEALAND': 4, 'NZ ': 4,
+    'IRELAND': 5, 'IE ': 5,
+  };
 
-  bool _isPriority(String group) {
+  /// Lower is higher priority; null means "not a priority group at all".
+  int? _priorityRank(String group) {
     final g = group.trim().toUpperCase();
-    return _priorityPrefixes.any((p) => g.startsWith(p));
+    for (final entry in _priorityRanks.entries) {
+      if (g.startsWith(entry.key)) return entry.value;
+    }
+    return null;
   }
 
   List<String> get groups {
     final seen = <String>{};
     final all = [for (final c in channels) if (seen.add(c.group)) c.group];
-    final priority = all.where(_isPriority).toList();
-    final rest = all.where((g) => !_isPriority(g)).toList();
-    return [...priority, ...rest];
+    // (rank, original index, name) so equal-rank groups keep the provider's
+    // original relative order — List.sort isn't guaranteed stable.
+    final ranked = <(int, int, String)>[];
+    final rest = <String>[];
+    for (var i = 0; i < all.length; i++) {
+      final r = _priorityRank(all[i]);
+      if (r == null) { rest.add(all[i]); } else { ranked.add((r, i, all[i])); }
+    }
+    ranked.sort((a, b) => a.$1 != b.$1 ? a.$1.compareTo(b.$1) : a.$2.compareTo(b.$2));
+    return [...ranked.map((e) => e.$3), ...rest];
   }
 
   List<Channel> inGroup(String g) => channels.where((c) => c.group == g).toList();
+
+  // ---- VOD / Series (Xtream-only) -----------------------------------------
+
+  List<VodItem> vodItems = [];
+  List<SeriesItem> seriesItems = [];
+
+  /// Movies/Series/Catchup all need a real Xtream login (not available for a
+  /// plain M3U playlist source).
+  bool get supportsVod => activeServer?.account.type == SourceType.xtream;
+
+  /// The active server's Xtream client, or null for M3U sources.
+  XtreamService? get xtream {
+    final a = activeServer?.account;
+    if (a == null || a.type != SourceType.xtream) return null;
+    return XtreamService(a);
+  }
+
+  Future<void> loadVod() async {
+    final x = xtream;
+    vodItems = x == null ? [] : await x.vodItems();
+  }
+
+  Future<void> loadSeries() async {
+    final x = xtream;
+    seriesItems = x == null ? [] : await x.seriesItems();
+  }
+
+  List<String> get vodGroups {
+    final seen = <String>{};
+    return [for (final v in vodItems) if (seen.add(v.group)) v.group];
+  }
+
+  List<VodItem> vodInGroup(String g) => vodItems.where((v) => v.group == g).toList();
+
+  List<String> get seriesGroups {
+    final seen = <String>{};
+    return [for (final s in seriesItems) if (seen.add(s.group)) s.group];
+  }
+
+  List<SeriesItem> seriesInGroup(String g) => seriesItems.where((s) => s.group == g).toList();
+
+  /// Live channels with catchup/timeshift available.
+  List<Channel> get archiveChannels => channels.where((c) => c.tvArchive).toList();
 }

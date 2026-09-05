@@ -4,11 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../services/channel_repo.dart';
 import '../services/live_stream_tuning.dart';
 import '../services/storage.dart';
 import 'tv_widgets.dart';
+
+/// Settings > Player toggle — some Android TV boxes hang with a black
+/// picture (audio may or may not play) on certain hardware-decoded streams;
+/// forcing software decode is a low-risk workaround to try when that
+/// happens. Best-effort: if the installed media_kit version doesn't expose
+/// this mpv property the same way, it's silently ignored rather than
+/// crashing playback.
+const kForceSoftwareDecodeKey = 'force_software_decode';
 
 /// Full-screen live player. Remote: Up/Down = channel +/-, OK = info overlay, Back = exit.
 class PlayerScreen extends StatefulWidget {
@@ -24,7 +33,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   late final VideoController controller = VideoController(player);
   late int idx = widget.index;
   bool overlay = true;
+  bool buffering = true;
   Timer? hideTimer;
+  Timer? _stallTimer;
   String? error;
   final _digits = Queue<String>();
   Timer? _digitTimer;
@@ -37,12 +48,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.initState();
     tuneForLiveTs(player);
     player.stream.error.listen((e) { if (mounted) setState(() => error = e); });
+    player.stream.buffering.listen((b) {
+      if (!b) _stallTimer?.cancel();
+      if (mounted) setState(() => buffering = b);
+    });
+    _applyDecodePreference();
     _open();
   }
 
+  /// Best-effort: ask libmpv to use software decoding if the user flipped
+  /// that switch in Settings > Player. Silently does nothing if this
+  /// media_kit version doesn't support direct property access.
+  Future<void> _applyDecodePreference() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      if (p.getBool(kForceSoftwareDecodeKey) != true) return;
+      // Reached dynamically (not via a static NativePlayer type) so this
+      // still compiles cleanly across media_kit versions that shape the
+      // native platform API slightly differently.
+      final dynamic platform = player.platform;
+      await platform?.setProperty('hwdec', 'no');
+    } catch (_) {
+      // Best-effort only — never let this block playback.
+    }
+  }
+
   Future<void> _open() async {
-    setState(() { error = null; overlay = true; });
+    setState(() { error = null; overlay = true; buffering = true; });
     Storage.saveLastChannel(ch.id);
+    _stallTimer?.cancel();
+    _stallTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted && buffering && error == null) {
+        setState(() => error = 'Still loading after 15s — the stream may be down, or try '
+            'Settings > Player > Software decoding if the picture is black.');
+      }
+    });
     await player.open(Media(ch.streamUrl));
     _scheduleHide();
   }
@@ -82,6 +122,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     hideTimer?.cancel();
     _digitTimer?.cancel();
+    _stallTimer?.cancel();
     player.dispose();
     super.dispose();
   }
@@ -107,8 +148,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
         },
         child: Stack(fit: StackFit.expand, children: [
           Video(controller: controller, controls: NoVideoControls),
+          if (error == null && buffering)
+            const Center(child: CircularProgressIndicator()),
           if (error != null)
-            Center(child: Text('Stream error: $error', style: const TextStyle(color: Colors.redAccent, fontSize: 20))),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Text('Stream error: $error',
+                    textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontSize: 20)),
+              ),
+            ),
           if (_digitPreview.isNotEmpty)
             Positioned(
               top: 32, right: 32,

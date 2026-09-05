@@ -53,6 +53,7 @@ with open(f"{P}/assets/branding.json", "w") as f:
         "epg_url": a.epg_url, "vpn_config_url": a.vpn_url, "support_text": a.support_text,
         "portals": portals, "pair_base_url": a.pair_base_url,
         "repo": a.repo, "build_number": int(a.build_number or 0),
+        "has_custom_logo": bool(a.icon),
     }, f, indent=2)
 print("[brand] wrote branding.json")
 
@@ -121,6 +122,11 @@ res = f"{P}/android/app/src/main/res"
 for d, sz in {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}.items():
     os.makedirs(f"{res}/mipmap-{d}", exist_ok=True)
     icon.resize((sz, sz), Image.LANCZOS).save(f"{res}/mipmap-{d}/ic_launcher.png")
+
+# Same artwork, bundled as a Flutter asset so the app itself can show your
+# logo (not just the Android launcher) — see assets/logo.png in home_screen.dart.
+icon.resize((256, 256), Image.LANCZOS).save(f"{P}/assets/logo.png")
+print("[brand] logo.png bundled for in-app use" + (" (from --icon)" if a.icon else " (auto-generated)"))
 
 # TV banner 320x180 (xhdpi): icon on the left, name on the right
 ban = Image.new("RGBA", (320, 180), color)

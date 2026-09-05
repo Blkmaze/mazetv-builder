@@ -222,6 +222,52 @@ class ChannelLogo extends StatelessWidget {
   }
 }
 
+/// A focus-aware poster tile for grid browsing (Movies/Series covers).
+class PosterTile extends StatelessWidget {
+  final String title;
+  final String cover;
+  final VoidCallback onSelect;
+  final bool autofocus;
+  const PosterTile({super.key, required this.title, required this.cover, required this.onSelect, this.autofocus = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      child: Builder(builder: (ctx) {
+        final focused = Focus.of(ctx).hasFocus;
+        return InkWell(
+          autofocus: autofocus,
+          onTap: onSelect,
+          borderRadius: BorderRadius.circular(8),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.white10,
+                  border: Border.all(color: focused ? primary : Colors.transparent, width: 3),
+                ),
+                child: cover.isEmpty
+                    ? const Center(child: Icon(Icons.movie, color: Colors.white24, size: 40))
+                    : Image.network(cover, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.movie, color: Colors.white24, size: 40))),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13)),
+          ]),
+        );
+      }),
+    );
+  }
+}
+
 Future<void> showError(BuildContext context, Object e) => showDialog(
       context: context,
       builder: (_) => AlertDialog(

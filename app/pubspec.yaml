@@ -18,8 +18,10 @@ dependencies:
   package_info_plus: ^8.0.0
   openvpn_flutter: ^1.3.4
   url_launcher: ^6.3.0
+  path_provider: ^2.1.0
 
 flutter:
   uses-material-design: true
   assets:
     - assets/branding.json
+    - assets/logo.png

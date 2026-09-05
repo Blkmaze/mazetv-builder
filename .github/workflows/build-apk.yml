@@ -32,7 +32,7 @@ on:
         required: false
         default: "Contact your provider for login details."
       icon_url:
-        description: "URL to a 512x512 PNG icon (optional; initials icon is generated if blank)"
+        description: "URL to a 512x512 PNG — used as the launcher icon, TV banner, AND the in-app logo (optional; initials icon is generated if blank)"
         required: false
         default: ""
       portals:

@@ -14,6 +14,7 @@ class Branding {
   final String pairBaseUrl;    // base URL of the Netlify pairing functions, for code/QR sign-in
   final String repo;           // "owner/name" this build was published from, for OTA checks
   final int buildNumber;       // this build's GitHub Actions run number
+  final bool hasCustomLogo;    // true if icon_url was set (assets/logo.png is your art, not a placeholder)
 
   const Branding({
     required this.appName,
@@ -26,6 +27,7 @@ class Branding {
     required this.pairBaseUrl,
     this.repo = '',
     this.buildNumber = 0,
+    this.hasCustomLogo = false,
   });
 
 
@@ -49,6 +51,7 @@ class Branding {
       pairBaseUrl: j['pair_base_url'] ?? '',
       repo: j['repo'] ?? '',
       buildNumber: (j['build_number'] as num?)?.toInt() ?? 0,
+      hasCustomLogo: j['has_custom_logo'] == true,
     );
   }
 

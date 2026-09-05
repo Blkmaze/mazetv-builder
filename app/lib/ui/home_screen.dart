@@ -6,16 +6,21 @@ import '../models/profile.dart';
 import '../services/channel_repo.dart';
 import '../services/ota_service.dart';
 import '../services/storage.dart';
-import 'coming_soon_screen.dart';
+import 'catchup_screen.dart';
 import 'guide_screen.dart';
 import 'live_preview.dart';
-import 'pin_screen.dart';
 import 'login_screen.dart';
+import 'movies_screen.dart';
+import 'multiview_screen.dart';
+import 'pin_screen.dart';
 import 'player_screen.dart';
 import 'profiles_screen.dart';
+import 'recordings_screen.dart';
+import 'series_screen.dart';
 import 'servers_screen.dart';
 import 'settings_screen.dart';
 import 'tv_widgets.dart';
+import 'watch_party_screen.dart';
 
 const String kFavoritesGroup = '★ Favorites';
 
@@ -163,6 +168,11 @@ class _HomeScreenState extends State<HomeScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
           child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+            if (Branding.I.hasCustomLogo) ...[
+              Image.asset('assets/logo.png', height: 32, width: 32, fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const SizedBox()),
+              const SizedBox(width: 10),
+            ],
             Text(Branding.I.appName,
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Branding.I.primaryColor)),
             if (repo.activeServer != null) ...[
@@ -183,17 +193,17 @@ class _HomeScreenState extends State<HomeScreen> {
               TvRailTile(icon: Icons.live_tv, label: 'Live', expanded: expanded,
                   onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GuideScreen()))),
               TvRailTile(icon: Icons.history, label: 'Catchup', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Catchup', icon: Icons.history)))),
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CatchupScreen()))),
               TvRailTile(icon: Icons.movie, label: 'Movies', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Movies', icon: Icons.movie)))),
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MoviesScreen()))),
               TvRailTile(icon: Icons.video_library, label: 'Series', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Series', icon: Icons.video_library)))),
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SeriesScreen()))),
               TvRailTile(icon: Icons.groups, label: 'Watch Party', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Watch Party', icon: Icons.groups)))),
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WatchPartyScreen()))),
               TvRailTile(icon: Icons.grid_view, label: 'Multiview', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Multiview', icon: Icons.grid_view)))),
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiviewScreen()))),
               TvRailTile(icon: Icons.fiber_manual_record, label: 'Recordings', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Recordings', icon: Icons.fiber_manual_record)))),
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RecordingsScreen()))),
               const SizedBox(height: 24),
               TvRailTile(icon: Icons.settings, label: 'Settings', expanded: expanded, onSelect: _openSettings),
               const SizedBox(height: 8),

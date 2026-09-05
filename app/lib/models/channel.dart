@@ -5,6 +5,10 @@ class Channel {
   final String logo;
   final String streamUrl;
   final String epgId;
+  /// Whether this channel's portal offers catchup/timeshift for it.
+  final bool tvArchive;
+  /// How many hours of catchup are available, if [tvArchive] is true.
+  final int tvArchiveDuration;
 
   const Channel({
     required this.id,
@@ -13,6 +17,8 @@ class Channel {
     required this.logo,
     required this.streamUrl,
     required this.epgId,
+    this.tvArchive = false,
+    this.tvArchiveDuration = 0,
   });
 }
 
