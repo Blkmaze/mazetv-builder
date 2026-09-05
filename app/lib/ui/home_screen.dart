@@ -6,7 +6,9 @@ import '../models/profile.dart';
 import '../services/channel_repo.dart';
 import '../services/ota_service.dart';
 import '../services/storage.dart';
+import 'coming_soon_screen.dart';
 import 'guide_screen.dart';
+import 'live_preview.dart';
 import 'login_screen.dart';
 import 'player_screen.dart';
 import 'profiles_screen.dart';
@@ -29,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String search = '';
   String? activeProfileId;
   Set<String> favorites = {};
+  Channel? previewChannel;
 
   @override
   void initState() {
@@ -58,7 +61,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
       group = repo.groups.isEmpty ? null : repo.groups.first;
       if (!mounted) return;
-      setState(() => loading = false);
+      setState(() {
+        loading = false;
+        final inGroup = repo.inGroup(group ?? '');
+        previewChannel = inGroup.isNotEmpty ? inGroup.first : (repo.channels.isEmpty ? null : repo.channels.first);
+      });
       repo.loadEpg().then((_) { if (mounted) setState(() {}); });
       _checkForUpdate();
     } catch (e) {
@@ -107,19 +114,6 @@ class _HomeScreenState extends State<HomeScreen> {
     repo.channels = [];
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
-  }
-
-  Future<void> _openServers() async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ServersScreen()));
-    repo.channels = [];
-    _boot();
-  }
-
-  Future<void> _openProfiles() async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilesScreen(selecting: false)));
-    activeProfileId = await Storage.activeProfileId();
-    favorites = await Storage.favorites(activeProfileId);
-    if (mounted) setState(() {});
   }
 
   Future<void> _openSettings() async {
@@ -171,12 +165,26 @@ class _HomeScreenState extends State<HomeScreen> {
             // ---- collapsible icon nav (expands to labels while focus is inside it)
             TvNavRail(itemsBuilder: (expanded) => [
               const SizedBox(height: 8),
-              TvRailTile(icon: Icons.grid_view, label: 'TV Guide', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GuideScreen()))),
-              TvRailTile(icon: Icons.dns, label: 'Servers', expanded: expanded, onSelect: _openServers),
-              TvRailTile(icon: Icons.people, label: 'Profiles', expanded: expanded, onSelect: _openProfiles),
               TvRailTile(icon: Icons.search, label: 'Search', expanded: expanded, onSelect: _openSearch),
+              TvRailTile(icon: Icons.home, label: 'Home', expanded: expanded,
+                  onSelect: () => setState(() { group = repo.groups.isEmpty ? null : repo.groups.first; search = ''; })),
+              TvRailTile(icon: Icons.live_tv, label: 'Live', expanded: expanded,
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GuideScreen()))),
+              TvRailTile(icon: Icons.history, label: 'Catchup', expanded: expanded,
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Catchup', icon: Icons.history)))),
+              TvRailTile(icon: Icons.movie, label: 'Movies', expanded: expanded,
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Movies', icon: Icons.movie)))),
+              TvRailTile(icon: Icons.video_library, label: 'Series', expanded: expanded,
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Series', icon: Icons.video_library)))),
+              TvRailTile(icon: Icons.groups, label: 'Watch Party', expanded: expanded,
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Watch Party', icon: Icons.groups)))),
+              TvRailTile(icon: Icons.grid_view, label: 'Multiview', expanded: expanded,
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Multiview', icon: Icons.grid_view)))),
+              TvRailTile(icon: Icons.fiber_manual_record, label: 'Recordings', expanded: expanded,
+                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ComingSoonScreen(title: 'Recordings', icon: Icons.fiber_manual_record)))),
+              const SizedBox(height: 24),
               TvRailTile(icon: Icons.settings, label: 'Settings', expanded: expanded, onSelect: _openSettings),
+              const SizedBox(height: 8),
             ]),
             const VerticalDivider(width: 1),
             // ---- categories (always visible, its own column)
@@ -199,18 +207,23 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const VerticalDivider(width: 1),
-            // ---- channel list
+            // ---- channel list, with a live preview strip pinned above it
             Expanded(
-              child: channels.isEmpty
-              ? Center(child: Text(group == kFavoritesGroup ? 'No favorites yet — hold OK on a channel to add one' : 'No channels'))
-              : ListView.builder(
-                  itemCount: channels.length,
-                  itemBuilder: (_, i) {
-                    final c = channels[i];
-                    final now = repo.epg.nowPlaying(c.epgId);
-                    final isFav = favorites.contains(c.id);
-                    return TvTile(
-                      leading: SizedBox(
+              child: Column(children: [
+                LivePreviewStrip(key: ValueKey(previewChannel?.id), channel: previewChannel),
+                const Divider(height: 1),
+                Expanded(
+                  child: channels.isEmpty
+                  ? Center(child: Text(group == kFavoritesGroup ? 'No favorites yet — hold OK on a channel to add one' : 'No channels'))
+                  : ListView.builder(
+                      itemCount: channels.length,
+                      itemBuilder: (_, i) {
+                        final c = channels[i];
+                        final now = repo.epg.nowPlaying(c.epgId);
+                        final isFav = favorites.contains(c.id);
+                        return TvTile(
+                          onFocusChange: (has) { if (has) setState(() => previewChannel = c); },
+                          leading: SizedBox(
                         width: 74,
                         child: Row(mainAxisSize: MainAxisSize.min, children: [
                           SizedBox(width: 28, child: Text('${i + 1}', textAlign: TextAlign.right,
@@ -224,11 +237,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           : Text('${_hm(now.start)}–${_hm(now.stop)}  ${now.title}',
                               maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60)),
                       trailing: isFav ? const Icon(Icons.star, color: Colors.amber) : null,
-                      onSelect: () => _play(channels, i),
-                      onLongSelect: () => _toggleFavorite(c),
-                    );
-                  },
+                          onSelect: () => _play(channels, i),
+                          onLongSelect: () => _toggleFavorite(c),
+                        );
+                      },
+                    ),
                 ),
+              ]),
             ),
           ]),
         ),

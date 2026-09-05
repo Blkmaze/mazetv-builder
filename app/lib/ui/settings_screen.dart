@@ -4,6 +4,8 @@ import '../config/branding.dart';
 import '../services/channel_repo.dart';
 import '../services/storage.dart';
 import 'login_screen.dart';
+import 'profiles_screen.dart';
+import 'servers_screen.dart';
 import 'tv_widgets.dart';
 import 'vpn_screen.dart';
 
@@ -74,6 +76,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Refresh channels & guide'),
             subtitle: refreshing ? const Text('Reloading…') : const Text('Re-fetch your channel list and EPG'),
             onSelect: refreshing ? () {} : _refresh,
+          ),
+          TvTile(
+            leading: const Icon(Icons.dns),
+            title: const Text('Servers'),
+            subtitle: const Text('Manage saved portals and failover order'),
+            onSelect: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const ServersScreen()));
+              if (mounted) setState(() {});
+            },
+          ),
+          TvTile(
+            leading: const Icon(Icons.people),
+            title: const Text('Profiles'),
+            subtitle: const Text('Manage who\'s watching and their favorites'),
+            onSelect: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilesScreen(selecting: false)));
+              if (mounted) setState(() {});
+            },
           ),
           TvTile(
             leading: const Icon(Icons.vpn_lock),

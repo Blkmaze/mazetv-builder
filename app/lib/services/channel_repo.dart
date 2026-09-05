@@ -66,9 +66,26 @@ class ChannelRepo {
     }
   }
 
+  /// Groups with English-speaking country categories (USA, UK, Canada,
+  /// Australia, New Zealand, Ireland) surfaced first, since that's what
+  /// most viewers on this build are looking for — everything else keeps
+  /// its original relative order after that.
+  static const _priorityPrefixes = [
+    'USA', 'US ', 'US:', 'UK ', 'UK:', 'GB ', 'CANADA', 'AUSTRALIA', 'AU ',
+    'NEW ZEALAND', 'NZ ', 'IRELAND', 'IE ',
+  ];
+
+  bool _isPriority(String group) {
+    final g = group.trim().toUpperCase();
+    return _priorityPrefixes.any((p) => g.startsWith(p));
+  }
+
   List<String> get groups {
     final seen = <String>{};
-    return [for (final c in channels) if (seen.add(c.group)) c.group];
+    final all = [for (final c in channels) if (seen.add(c.group)) c.group];
+    final priority = all.where(_isPriority).toList();
+    final rest = all.where((g) => !_isPriority(g)).toList();
+    return [...priority, ...rest];
   }
 
   List<Channel> inGroup(String g) => channels.where((c) => c.group == g).toList();
