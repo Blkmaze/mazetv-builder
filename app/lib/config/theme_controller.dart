@@ -14,7 +14,7 @@ class ThemePreset {
 /// accent color (buttons, highlights) and the background. Falls back to the
 /// builder's baked-in accent on a dark background until changed.
 class ThemeController {
-  static const defaultBackground = Color(0xFF0E0E10);
+  static const defaultBackground = Color(0xFF0A0E16);
 
   static final ValueNotifier<Color> primaryColor = ValueNotifier(Branding.I.primaryColor);
   static final ValueNotifier<Color> background = ValueNotifier(defaultBackground);

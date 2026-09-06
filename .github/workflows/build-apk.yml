@@ -6,7 +6,7 @@ on:
       app_name:
         description: "App name shown on the TV (e.g. Maze TV)"
         required: true
-        default: "Maze TV"
+        default: "HyDr0"
       package_id:
         description: "Unique package id, lowercase (e.g. com.mybrand.tv)"
         required: true
@@ -14,7 +14,7 @@ on:
       primary_color:
         description: "Brand color, hex (#RRGGBB)"
         required: true
-        default: "#E50914"
+        default: "#00B4FF"
       portal_url:
         description: "Pre-fill Xtream server URL (optional)"
         required: false

@@ -103,7 +103,7 @@ print("[brand] manifest patched for Android TV")
 # 4. icons -------------------------------------------------------------------
 # The repo's stock icon, used whenever a build doesn't supply --icon. Lives
 # next to this script so it resolves no matter what the working directory is.
-DEFAULT_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "brand-assets", "mazetv-rings-play.png")
+DEFAULT_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "brand-assets", "hydr0-droplet-h.png")
 
 def load_icon():
     if a.icon:
