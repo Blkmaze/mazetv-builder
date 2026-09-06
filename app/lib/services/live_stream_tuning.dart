@@ -30,13 +30,19 @@ Future<void> tuneForLiveTs(Player player, {bool preview = false}) async {
     // Recover a dropped HTTP connection transparently, mid-stream.
     'stream-lavf-o': 'reconnect=1,reconnect_streamed=1,reconnect_at_eof=1,reconnect_delay_max=5',
     'network-timeout': '15',
-    // Buffer generously and let mpv pause-to-refill instead of stuttering.
+    // Buffer ahead and let mpv pause-to-refill instead of stuttering. Sizes
+    // are deliberately modest: TV boxes have little RAM, and a 150MiB+ cache
+    // gets the whole app killed by the low-memory killer mid-playback —
+    // which looks exactly like a random crash.
     'cache': 'yes',
     'cache-pause-initial': 'yes',
     'cache-pause-wait': '2',
-    'demuxer-readahead-secs': preview ? '5' : '20',
-    'demuxer-max-bytes': preview ? '16MiB' : '150MiB',
-    'demuxer-max-back-bytes': preview ? '4MiB' : '50MiB',
+    'demuxer-readahead-secs': preview ? '4' : '12',
+    'demuxer-max-bytes': preview ? '8MiB' : '48MiB',
+    'demuxer-max-back-bytes': preview ? '2MiB' : '8MiB',
+    // Only use hardware decoders known to be safe; "auto" will happily pick
+    // a broken vendor decoder and take the app down with it.
+    'hwdec': 'auto-safe',
   };
 
   // Each one independently — an option missing on some libmpv build must

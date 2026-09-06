@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import '../config/branding.dart';
 import '../models/channel.dart';
@@ -35,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool loading = true;
   String? activeProfileId;
   List<Channel> mostWatched = [];
+  String _backdrop = '';
 
   @override
   void initState() {
@@ -169,29 +171,76 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: s)));
   }
 
+  void _setBackdrop(String cover) {
+    if (cover != _backdrop && mounted) setState(() => _backdrop = cover);
+  }
+
+  /// Top bar: logo (Hero landing spot for the splash), app name, active server.
+  Widget _brandBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Hero(
+          tag: 'brand-logo',
+          child: Image.asset('assets/logo.png', height: 32, width: 32, fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const SizedBox()),
+        ),
+        const SizedBox(width: 10),
+        Text(Branding.I.appName,
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Branding.I.primaryColor)),
+        if (repo.activeServer != null) ...[
+          const SizedBox(width: 14),
+          Text('via ${repo.activeServer!.nickname}', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+        ],
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (loading) {
+      return Scaffold(
+        body: Column(children: [
+          _brandBar(),
+          const Divider(height: 1),
+          const Expanded(child: Center(child: CircularProgressIndicator())),
+        ]),
+      );
+    }
+    final popularMovies = repo.supportsVod ? repo.popularMovies : const <VodItem>[];
+    final popularSeries = repo.supportsVod ? repo.popularSeries : const <SeriesItem>[];
 
     return Scaffold(
-      body: Column(children: [
-        // ---- top brand bar
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
-            if (Branding.I.hasCustomLogo) ...[
-              Image.asset('assets/logo.png', height: 32, width: 32, fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox()),
-              const SizedBox(width: 10),
-            ],
-            Text(Branding.I.appName,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Branding.I.primaryColor)),
-            if (repo.activeServer != null) ...[
-              const SizedBox(width: 14),
-              Text('via ${repo.activeServer!.nickname}', style: const TextStyle(color: Colors.white38, fontSize: 12)),
-            ],
-          ]),
+      body: Stack(children: [
+        // ---- blurred backdrop of whichever poster is highlighted (Ghost-style)
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            child: _backdrop.isEmpty
+                ? const SizedBox.shrink()
+                : ImageFiltered(
+                    key: ValueKey(_backdrop),
+                    imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+                    child: Opacity(
+                      opacity: 0.35,
+                      child: Image.network(_backdrop, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                    ),
+                  ),
+          ),
         ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                colors: [Colors.black.withOpacity(0.25), Colors.black.withOpacity(0.75)],
+              ),
+            ),
+          ),
+        ),
+        Column(children: [
+        _brandBar(),
         const Divider(height: 1),
         Expanded(
           child: Row(children: [
@@ -245,21 +294,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 8),
                 ],
-                if (repo.supportsVod && repo.vodItems.isNotEmpty) ...[
+                if (repo.supportsVod && popularMovies.isNotEmpty) ...[
                   const _RowHeader(title: 'Popular Movies'),
                   SizedBox(
                     height: 190,
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       scrollDirection: Axis.horizontal,
-                      itemCount: repo.vodItems.length.clamp(0, 20).toInt(),
+                      itemCount: popularMovies.length,
                       itemBuilder: (_, i) {
-                        final v = repo.vodItems[i];
+                        final v = popularMovies[i];
                         return Padding(
                           padding: const EdgeInsets.only(right: 14),
                           child: SizedBox(
                             width: 120,
-                            child: PosterTile(title: v.name, cover: v.cover, autofocus: i == 0, onSelect: () => _openMovie(v)),
+                            child: PosterTile(
+                              title: v.year > 0 && !v.name.contains('${v.year}') ? '${v.name} (${v.year})' : v.name,
+                              cover: v.cover,
+                              autofocus: i == 0,
+                              onFocusChange: (has) { if (has) _setBackdrop(v.cover); },
+                              onSelect: () => _openMovie(v),
+                            ),
                           ),
                         );
                       },
@@ -267,28 +322,33 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 8),
                 ],
-                if (repo.supportsVod && repo.seriesItems.isNotEmpty) ...[
+                if (repo.supportsVod && popularSeries.isNotEmpty) ...[
                   const _RowHeader(title: 'Popular Series'),
                   SizedBox(
                     height: 190,
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       scrollDirection: Axis.horizontal,
-                      itemCount: repo.seriesItems.length.clamp(0, 20).toInt(),
+                      itemCount: popularSeries.length,
                       itemBuilder: (_, i) {
-                        final s = repo.seriesItems[i];
+                        final s = popularSeries[i];
                         return Padding(
                           padding: const EdgeInsets.only(right: 14),
                           child: SizedBox(
                             width: 120,
-                            child: PosterTile(title: s.name, cover: s.cover, onSelect: () => _openSeries(s)),
+                            child: PosterTile(
+                              title: s.year > 0 && !s.name.contains('${s.year}') ? '${s.name} (${s.year})' : s.name,
+                              cover: s.cover,
+                              onFocusChange: (has) { if (has) _setBackdrop(s.cover); },
+                              onSelect: () => _openSeries(s),
+                            ),
                           ),
                         );
                       },
                     ),
                   ),
                 ],
-                if (mostWatched.isEmpty && (!repo.supportsVod || (repo.vodItems.isEmpty && repo.seriesItems.isEmpty)))
+                if (mostWatched.isEmpty && popularMovies.isEmpty && popularSeries.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(32),
                     child: Text(
@@ -302,6 +362,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ]),
         ),
+      ]),
       ]),
     );
   }

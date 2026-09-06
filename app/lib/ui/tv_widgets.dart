@@ -298,7 +298,9 @@ class PosterTile extends StatelessWidget {
   final String cover;
   final VoidCallback onSelect;
   final bool autofocus;
-  const PosterTile({super.key, required this.title, required this.cover, required this.onSelect, this.autofocus = false});
+  final ValueChanged<bool>? onFocusChange;
+  const PosterTile({super.key, required this.title, required this.cover, required this.onSelect,
+      this.autofocus = false, this.onFocusChange});
 
   @override
   Widget build(BuildContext context) {
@@ -310,6 +312,7 @@ class PosterTile extends StatelessWidget {
         final focused = Focus.of(ctx).hasFocus;
         return InkWell(
           autofocus: autofocus,
+          onFocusChange: onFocusChange,
           onTap: onSelect,
           borderRadius: BorderRadius.circular(8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

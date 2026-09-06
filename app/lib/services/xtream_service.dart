@@ -98,6 +98,9 @@ class XtreamService {
         cover: (s['stream_icon'] ?? s['cover'] ?? '').toString(),
         streamUrl: '$_base/movie/${acct.username}/${acct.password}/$id.$ext',
         plot: (s['plot'] ?? '').toString(),
+        rating: _rating(s),
+        added: _int(s['added']),
+        year: _year(s),
       );
     }).toList();
   }
@@ -117,6 +120,9 @@ class XtreamService {
         group: catName[s['category_id']?.toString()] ?? 'Other',
         cover: (s['cover'] ?? '').toString(),
         plot: (s['plot'] ?? '').toString(),
+        rating: _rating(s),
+        added: _int(s['last_modified'] ?? s['added']),
+        year: _year(s),
       );
     }).toList();
   }
@@ -162,5 +168,30 @@ class XtreamService {
         '${s.day.toString().padLeft(2, '0')}:${s.hour.toString().padLeft(2, '0')}-${s.minute.toString().padLeft(2, '0')}';
     final dur = minutes < 1 ? 1 : minutes;
     return '$_base/timeshift/${acct.username}/${acct.password}/$dur/$stamp/${ch.id}.ts';
+  }
+
+  // ---- tolerant parsing of the loosely-typed fields portals send ---------
+
+  /// Prefers the 0–10 "rating"; falls back to "rating_5based" x2.
+  static double _rating(Map s) {
+    final r = double.tryParse((s['rating'] ?? '').toString());
+    if (r != null && r > 0) return r > 10 ? 10 : r;
+    final r5 = double.tryParse((s['rating_5based'] ?? '').toString());
+    if (r5 != null && r5 > 0) return (r5 * 2).clamp(0, 10).toDouble();
+    return 0;
+  }
+
+  static int _int(Object? v) => int.tryParse((v ?? '').toString()) ?? 0;
+
+  /// Year from "year", "release_date"/"releaseDate" (yyyy-…), or a trailing
+  /// "(2024)" in the title — providers are inconsistent about where it lives.
+  static int _year(Map s) {
+    for (final k in ['year', 'release_date', 'releaseDate']) {
+      final m = RegExp(r'(19|20)\d{2}').firstMatch((s[k] ?? '').toString());
+      if (m != null) return int.parse(m.group(0)!);
+    }
+    final m = RegExp(r'\((19|20)\d{2}\)').firstMatch((s['name'] ?? '').toString());
+    if (m != null) return int.parse(m.group(0)!.replaceAll(RegExp(r'[()]'), ''));
+    return 0;
   }
 }

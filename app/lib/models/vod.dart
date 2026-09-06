@@ -6,6 +6,9 @@ class VodItem {
   final String cover;
   final String streamUrl;
   final String plot;
+  final double rating;   // 0 when the provider gives none
+  final int added;       // unix seconds the provider added it; 0 if unknown
+  final int year;        // release year; 0 if unknown
 
   const VodItem({
     required this.id,
@@ -14,6 +17,9 @@ class VodItem {
     required this.cover,
     required this.streamUrl,
     this.plot = '',
+    this.rating = 0,
+    this.added = 0,
+    this.year = 0,
   });
 }
 
@@ -25,6 +31,9 @@ class SeriesItem {
   final String group;
   final String cover;
   final String plot;
+  final double rating;   // 0 when the provider gives none
+  final int added;       // unix seconds last modified/added; 0 if unknown
+  final int year;        // first-aired year; 0 if unknown
 
   const SeriesItem({
     required this.id,
@@ -32,6 +41,9 @@ class SeriesItem {
     required this.group,
     required this.cover,
     this.plot = '',
+    this.rating = 0,
+    this.added = 0,
+    this.year = 0,
   });
 }
 

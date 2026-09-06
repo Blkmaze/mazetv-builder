@@ -154,6 +154,35 @@ class ChannelRepo {
 
   List<SeriesItem> seriesInGroup(String g) => seriesItems.where((s) => s.group == g).toList();
 
+  /// "Popular" without a popularity feed: recent titles first (last two
+  /// years, or newly added by the provider), ranked by rating. Unrated
+  /// items sink to the bottom. Falls back to newest-added when a provider
+  /// sends no years at all, so the row never comes back empty.
+  static List<T> _popular<T>(List<T> items, {
+    required int Function(T) year, required int Function(T) added, required double Function(T) rating,
+    int take = 20,
+  }) {
+    final cutoffYear = DateTime.now().year - 1;
+    final cutoffAdded = DateTime.now().subtract(const Duration(days: 120)).millisecondsSinceEpoch ~/ 1000;
+    final recent = items.where((i) => year(i) >= cutoffYear || added(i) >= cutoffAdded).toList();
+    final pool = recent.length >= 8 ? recent : items;
+    int cmp(T a, T b) {
+      final r = rating(b).compareTo(rating(a));
+      if (r != 0) return r;
+      final y = year(b).compareTo(year(a));
+      if (y != 0) return y;
+      return added(b).compareTo(added(a));
+    }
+    final sorted = [...pool]..sort(cmp);
+    return sorted.take(take).toList();
+  }
+
+  List<VodItem> get popularMovies =>
+      _popular(vodItems, year: (v) => v.year, added: (v) => v.added, rating: (v) => v.rating);
+
+  List<SeriesItem> get popularSeries =>
+      _popular(seriesItems, year: (s) => s.year, added: (s) => s.added, rating: (s) => s.rating);
+
   /// Live channels with catchup/timeshift available.
   List<Channel> get archiveChannels => channels.where((c) => c.tvArchive).toList();
 }

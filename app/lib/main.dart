@@ -5,6 +5,7 @@ import 'config/theme_controller.dart';
 import 'services/storage.dart';
 import 'ui/home_screen.dart';
 import 'ui/login_screen.dart';
+import 'ui/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +41,7 @@ class MazeTvApp extends StatelessWidget {
           listTileTheme: const ListTileThemeData(minVerticalPadding: 12),
           focusColor: accent.withOpacity(0.35),
         ),
-        home: startLoggedIn ? const HomeScreen() : const LoginScreen(),
+        home: SplashScreen(next: startLoggedIn ? const HomeScreen() : const LoginScreen()),
       ),
     );
   }
