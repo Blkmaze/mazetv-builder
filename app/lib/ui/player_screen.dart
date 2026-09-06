@@ -155,7 +155,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),
-                child: Text('Stream error: $error',
+                child: Text('Stream error: ${scrubSecrets(error!)}',
                     textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontSize: 20)),
               ),
             ),

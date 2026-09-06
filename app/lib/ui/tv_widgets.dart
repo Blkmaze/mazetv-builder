@@ -34,6 +34,7 @@ class TvTile extends StatefulWidget {
 class _TvTileState extends State<TvTile> {
   Timer? _holdTimer;
   bool _longFired = false;
+  bool _hasFocus = false;
 
   static final _activateKeys = {
     LogicalKeyboardKey.select, LogicalKeyboardKey.enter, LogicalKeyboardKey.numpadEnter,
@@ -46,6 +47,11 @@ class _TvTileState extends State<TvTile> {
   /// This starts our own timer on key-down and, if the key is still down
   /// when it fires, calls onLongSelect and swallows the eventual key-up so
   /// the normal short-press select doesn't also fire for the same hold.
+  ///
+  /// Crucially, a normal short press that navigates away (e.g. OK to play)
+  /// moves focus to the new screen BEFORE the key-up arrives — so this tile
+  /// never sees that key-up. Without the focus checks below, the timer would
+  /// fire anyway and long-select every channel you simply tuned to.
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (widget.onLongSelect == null || !_activateKeys.contains(event.logicalKey)) {
       return KeyEventResult.ignored;
@@ -54,6 +60,7 @@ class _TvTileState extends State<TvTile> {
       _longFired = false;
       _holdTimer?.cancel();
       _holdTimer = Timer(const Duration(milliseconds: 550), () {
+        if (!mounted || !_hasFocus) return; // focus moved on — this was a short press
         _longFired = true;
         widget.onLongSelect!();
       });
@@ -67,6 +74,16 @@ class _TvTileState extends State<TvTile> {
       }
     }
     return KeyEventResult.ignored;
+  }
+
+  void _onFocusChange(bool has) {
+    _hasFocus = has;
+    if (!has) {
+      // Leaving the tile cancels any pending long-press — the key-up that
+      // would normally cancel it is going to land on whatever now has focus.
+      _holdTimer?.cancel();
+      _longFired = false;
+    }
   }
 
   @override
@@ -89,6 +106,7 @@ class _TvTileState extends State<TvTile> {
         return InkWell(
           autofocus: widget.autofocus,
           onFocusChange: (has) {
+            _onFocusChange(has);
             // Keep the focused row on screen when the remote moves focus
             // past the edge of what's currently visible.
             if (has) {
@@ -318,11 +336,24 @@ class PosterTile extends StatelessWidget {
   }
 }
 
+/// Strip anything that could expose credentials before text reaches the
+/// screen. Xtream stream URLs carry the username AND password in the path
+/// (/live/USER/PASS/123.ts), and mpv's playback errors echo the full URL
+/// back — so any raw error is a credential leak waiting to happen.
+String scrubSecrets(Object e) => e
+    .toString()
+    .replaceFirst('Exception: ', '')
+    .replaceAll(RegExp(r'https?://\S+'), '[stream]')
+    // scheme-less path fragments mpv sometimes logs on their own
+    .replaceAllMapped(RegExp(r'/(live|movie|series|timeshift)/[^/\s]+/[^/\s]+/'), (m) => '/${m[1]}/[user]/[pass]/')
+    .replaceAll(RegExp(r',?\s*uri=\S+'), '')
+    .replaceAll(RegExp(r',?\s*address\s*=\s*[^,]+,?\s*port\s*=\s*\d+'), '');
+
 Future<void> showError(BuildContext context, Object e) => showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Something went wrong'),
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        content: Text(scrubSecrets(e)),
         actions: [TextButton(autofocus: true, onPressed: () => Navigator.pop(context), child: const Text('OK'))],
       ),
     );

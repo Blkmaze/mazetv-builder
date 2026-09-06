@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../models/vod.dart';
+import 'tv_widgets.dart';
 
 /// Full-screen movie player. Unlike live TV, VOD is seekable, so this uses
 /// media_kit's stock scrubber/controls instead of the custom live overlay
@@ -43,7 +44,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
           Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: Text('Playback error: $error',
+              child: Text('Playback error: ${scrubSecrets(error!)}',
                   textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontSize: 18)),
             ),
           ),

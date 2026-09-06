@@ -31,7 +31,7 @@ class _LivePreviewStripState extends State<LivePreviewStrip> {
   void initState() {
     super.initState();
     _player.setVolume(0);
-    tuneForLiveTs(_player);
+    tuneForLiveTs(_player, preview: true);
     _errSub = _player.stream.error.listen((_) { if (mounted) setState(() => _failed = true); });
     if (widget.channel != null) _open(widget.channel!);
   }

@@ -245,7 +245,8 @@ class _HomeScreenState extends State<HomeScreen> {
             TvNavRail(itemsBuilder: (expanded) => [
               const SizedBox(height: 8),
               TvRailTile(icon: Icons.search, label: 'Search', expanded: expanded, onSelect: _openSearch),
-              TvRailTile(icon: Icons.home, label: 'Home', expanded: expanded, onSelect: () {}),
+              TvRailTile(icon: Icons.home, label: 'Home', expanded: expanded,
+                  autofocus: !(repo.supportsVod && repo.vodItems.isNotEmpty), onSelect: () {}),
               TvRailTile(icon: Icons.live_tv, label: 'Live', expanded: expanded, onSelect: () => _openLive()),
               TvRailTile(icon: Icons.history, label: 'Catchup', expanded: expanded,
                   onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CatchupScreen()))),
@@ -297,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       scrollDirection: Axis.horizontal,
-                      itemCount: repo.vodItems.length.clamp(0, 20),
+                      itemCount: repo.vodItems.length.clamp(0, 20).toInt(),
                       itemBuilder: (_, i) {
                         final v = repo.vodItems[i];
                         return Padding(
@@ -319,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       scrollDirection: Axis.horizontal,
-                      itemCount: repo.seriesItems.length.clamp(0, 20),
+                      itemCount: repo.seriesItems.length.clamp(0, 20).toInt(),
                       itemBuilder: (_, i) {
                         final s = repo.seriesItems[i];
                         return Padding(
