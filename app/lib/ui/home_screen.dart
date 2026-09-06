@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../config/branding.dart';
 import '../models/channel.dart';
 import '../models/profile.dart';
 import '../models/vod.dart';
 import '../services/channel_repo.dart';
+import '../services/ota_installer.dart';
 import '../services/ota_service.dart';
 import '../services/storage.dart';
 import 'catchup_screen.dart';
@@ -93,13 +93,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final skipped = await Storage.otaSkippedBuild();
       if (skipped == update.build) return;
       if (!mounted) return;
-      final choice = await showDialog<String>(
+      await showDialog<void>(
         context: context,
+        barrierDismissible: false,
         builder: (_) => _UpdateDialog(update: update),
       );
-      if (choice == 'update') {
-        await launchUrl(Uri.parse(update.downloadUrl), mode: LaunchMode.externalApplication);
-      }
     } catch (_) {
       // OTA check is best-effort; never interrupt normal use over it.
     }
@@ -380,6 +378,9 @@ class _UpdateDialog extends StatefulWidget {
 
 class _UpdateDialogState extends State<_UpdateDialog> {
   final _updateFocus = FocusNode();
+  bool _downloading = false;
+  double _progress = 0;
+  String? _error;
 
   @override
   void initState() {
@@ -393,6 +394,27 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   void dispose() {
     _updateFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _startUpdate() async {
+    setState(() { _downloading = true; _progress = 0; _error = null; });
+    try {
+      await OtaInstaller.downloadAndInstall(
+        widget.update,
+        onProgress: (p) { if (mounted) setState(() => _progress = p); },
+      );
+      // Installer is now on screen (Android's own UI). Close our dialog so
+      // the app is in a clean state when it's relaunched on the new build.
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+          _error = scrubSecrets(e);
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _updateFocus.requestFocus(); });
+      }
+    }
   }
 
   static String _formatSize(int bytes) =>
@@ -426,20 +448,37 @@ class _UpdateDialogState extends State<_UpdateDialog> {
           Text('You are on build ${Branding.I.buildNumber}.',
               textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
           const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: TvButton(
-              label: 'Update now',
-              icon: Icons.file_download_outlined,
-              focusNode: _updateFocus,
-              onPressed: () => Navigator.pop(context, 'update'),
+          if (_downloading) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(value: _progress, minHeight: 10, backgroundColor: Colors.white12),
             ),
-          ),
-          const SizedBox(height: 16),
-          TextButton(
-            onPressed: () => Navigator.pop(context, 'later'),
-            child: const Text('Remind me later', style: TextStyle(color: Colors.white54)),
-          ),
+            const SizedBox(height: 10),
+            Text(
+              _progress >= 1.0 ? 'Opening installer…' : 'Downloading… ${(_progress * 100).round()}%',
+              style: const TextStyle(color: Colors.white70),
+            ),
+          ] else ...[
+            if (_error != null) ...[
+              Text(_error!, textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+              const SizedBox(height: 14),
+            ],
+            SizedBox(
+              width: double.infinity,
+              child: TvButton(
+                label: _error == null ? 'Update now' : 'Try again',
+                icon: Icons.file_download_outlined,
+                focusNode: _updateFocus,
+                onPressed: _startUpdate,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Remind me later', style: TextStyle(color: Colors.white54)),
+            ),
+          ],
         ]),
       ),
     );
