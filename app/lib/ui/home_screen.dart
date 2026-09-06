@@ -3,12 +3,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config/branding.dart';
 import '../models/channel.dart';
 import '../models/profile.dart';
+import '../models/vod.dart';
 import '../services/channel_repo.dart';
 import '../services/ota_service.dart';
 import '../services/storage.dart';
 import 'catchup_screen.dart';
-import 'guide_screen.dart';
-import 'live_preview.dart';
+import 'live_channels_screen.dart';
 import 'login_screen.dart';
 import 'movies_screen.dart';
 import 'multiview_screen.dart';
@@ -16,13 +16,13 @@ import 'pin_screen.dart';
 import 'player_screen.dart';
 import 'profiles_screen.dart';
 import 'recordings_screen.dart';
+import 'series_detail_screen.dart';
 import 'series_screen.dart';
 import 'servers_screen.dart';
 import 'settings_screen.dart';
 import 'tv_widgets.dart';
+import 'vod_player_screen.dart';
 import 'watch_party_screen.dart';
-
-const String kFavoritesGroup = '★ Favorites';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,11 +33,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final repo = ChannelRepo.I;
   bool loading = true;
-  String? group;
-  String search = '';
   String? activeProfileId;
-  Set<String> favorites = {};
-  Channel? previewChannel;
   List<Channel> mostWatched = [];
 
   @override
@@ -64,17 +60,18 @@ class _HomeScreenState extends State<HomeScreen> {
         if (chosen != null) activeProfileId = chosen.id;
       }
       activeProfileId ??= await Storage.activeProfileId();
-      favorites = await Storage.favorites(activeProfileId);
 
-      group = repo.groups.isEmpty ? null : repo.groups.first;
       await _loadMostWatched();
+      // Posters are the whole point of this page — worth the wait, and the
+      // API calls are skipped entirely for an M3U source (supportsVod false).
+      if (repo.supportsVod) {
+        if (repo.vodItems.isEmpty) await repo.loadVod();
+        if (repo.seriesItems.isEmpty) await repo.loadSeries();
+      }
+
       if (!mounted) return;
-      setState(() {
-        loading = false;
-        final inGroup = repo.inGroup(group ?? '');
-        previewChannel = inGroup.isNotEmpty ? inGroup.first : (repo.channels.isEmpty ? null : repo.channels.first);
-      });
-      repo.loadEpg().then((_) { if (mounted) setState(() {}); });
+      setState(() => loading = false);
+      repo.loadEpg();
       _checkForUpdate();
     } catch (e) {
       // Don't wipe a working server list just because it's briefly
@@ -175,15 +172,26 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _toggleFavorite(Channel c) async {
-    setState(() {
-      if (!favorites.remove(c.id)) favorites.add(c.id);
-    });
-    await Storage.setFavorites(activeProfileId, favorites);
+  Future<void> _openLive({String? search}) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => LiveChannelsScreen(initialSearch: search)));
+    await _loadMostWatched();
   }
 
-  void _play(List<Channel> list, int index) async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(playlist: list, index: index)));
+  void _openSearch() async {
+    final c = TextEditingController();
+    final r = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Search channels'),
+        content: TextField(controller: c, autofocus: true, onSubmitted: (v) => Navigator.pop(context, v)),
+        actions: [TextButton(onPressed: () => Navigator.pop(context, c.text), child: const Text('Search'))],
+      ),
+    );
+    if (r != null && r.trim().isNotEmpty) _openLive(search: r.trim());
+  }
+
+  Future<void> _playMostWatched(int index) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(playlist: mostWatched, index: index)));
     await _loadMostWatched();
   }
 
@@ -199,18 +207,17 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => mostWatched = []);
   }
 
+  void _openMovie(VodItem v) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => VodPlayerScreen(item: v)));
+  }
+
+  void _openSeries(SeriesItem s) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: s)));
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    final groups = [kFavoritesGroup, ...repo.groups];
-    List<Channel> channels;
-    if (search.isNotEmpty) {
-      channels = repo.channels.where((c) => c.name.toLowerCase().contains(search.toLowerCase())).toList();
-    } else if (group == kFavoritesGroup || group == null) {
-      channels = repo.channels.where((c) => favorites.contains(c.id)).toList();
-    } else {
-      channels = repo.inGroup(group!);
-    }
 
     return Scaffold(
       body: Column(children: [
@@ -232,46 +239,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ]),
         ),
         const Divider(height: 1),
-        if (mostWatched.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
-            child: Row(children: [
-              const Text('Your Most Watched Channels', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _clearMostWatched,
-                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.white54),
-                label: const Text('Clear most watched', style: TextStyle(color: Colors.white54, fontSize: 13)),
-              ),
-            ]),
-          ),
-          SizedBox(
-            height: 96,
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              scrollDirection: Axis.horizontal,
-              itemCount: mostWatched.length,
-              itemBuilder: (_, i) {
-                final c = mostWatched[i];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: _MostWatchedTile(channel: c, onSelect: () => _play(mostWatched, i)),
-                );
-              },
-            ),
-          ),
-          const Divider(height: 1),
-        ],
         Expanded(
           child: Row(children: [
             // ---- collapsible icon nav (expands to labels while focus is inside it)
             TvNavRail(itemsBuilder: (expanded) => [
               const SizedBox(height: 8),
               TvRailTile(icon: Icons.search, label: 'Search', expanded: expanded, onSelect: _openSearch),
-              TvRailTile(icon: Icons.home, label: 'Home', expanded: expanded,
-                  onSelect: () => setState(() { group = repo.groups.isEmpty ? null : repo.groups.first; search = ''; })),
-              TvRailTile(icon: Icons.live_tv, label: 'Live', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GuideScreen()))),
+              TvRailTile(icon: Icons.home, label: 'Home', expanded: expanded, onSelect: () {}),
+              TvRailTile(icon: Icons.live_tv, label: 'Live', expanded: expanded, onSelect: () => _openLive()),
               TvRailTile(icon: Icons.history, label: 'Catchup', expanded: expanded,
                   onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CatchupScreen()))),
               TvRailTile(icon: Icons.movie, label: 'Movies', expanded: expanded,
@@ -289,62 +264,85 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
             ]),
             const VerticalDivider(width: 1),
-            // ---- categories (always visible, its own column)
-            SizedBox(
-              width: 260,
-              child: ListView.builder(
-                itemCount: groups.length,
-                itemBuilder: (_, i) {
-                  final isFav = groups[i] == kFavoritesGroup;
-                  final count = isFav ? favorites.length : repo.inGroup(groups[i]).length;
-                  return TvTile(
-                    autofocus: i == 0,
-                    selected: groups[i] == group && search.isEmpty,
-                    leading: isFav ? const Icon(Icons.star, color: Colors.amber, size: 18) : null,
-                    title: Text(groups[i], maxLines: 1, overflow: TextOverflow.ellipsis),
-                    trailing: Text('$count', style: const TextStyle(color: Colors.white38)),
-                    onSelect: () => setState(() { group = groups[i]; search = ''; }),
-                  );
-                },
-              ),
-            ),
-            const VerticalDivider(width: 1),
-            // ---- channel list, with a live preview strip pinned above it
+            // ---- discovery: most-watched channels, then Movies/Series posters
             Expanded(
-              child: Column(children: [
-                LivePreviewStrip(key: const ValueKey('home-preview'), channel: previewChannel),
-                const Divider(height: 1),
-                Expanded(
-                  child: channels.isEmpty
-                  ? Center(child: Text(group == kFavoritesGroup ? 'No favorites yet — hold OK on a channel to add one' : 'No channels'))
-                  : ListView.builder(
-                      itemCount: channels.length,
-                      itemBuilder: (_, i) {
-                        final c = channels[i];
-                        final now = repo.epg.nowPlaying(c.epgId);
-                        final isFav = favorites.contains(c.id);
-                        return TvTile(
-                          onFocusChange: (has) { if (has) setState(() => previewChannel = c); },
-                          leading: SizedBox(
-                        width: 74,
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          SizedBox(width: 28, child: Text('${i + 1}', textAlign: TextAlign.right,
-                              style: const TextStyle(color: Colors.white38, fontSize: 15))),
-                          const SizedBox(width: 8),
-                          ChannelLogo(c.logo),
-                        ]),
+              child: ListView(padding: const EdgeInsets.symmetric(vertical: 16), children: [
+                if (mostWatched.isNotEmpty) ...[
+                  _RowHeader(
+                    title: 'Your Most Watched Channels',
+                    trailing: TextButton.icon(
+                      onPressed: _clearMostWatched,
+                      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.white54),
+                      label: const Text('Clear most watched', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 96,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: mostWatched.length,
+                      itemBuilder: (_, i) => Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: _MostWatchedTile(channel: mostWatched[i], onSelect: () => _playMostWatched(i)),
                       ),
-                      title: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: now == null ? null
-                          : Text('${_hm(now.start)}–${_hm(now.stop)}  ${now.title}',
-                              maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60)),
-                      trailing: isFav ? const Icon(Icons.star, color: Colors.amber) : null,
-                          onSelect: () => _play(channels, i),
-                          onLongSelect: () => _toggleFavorite(c),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (repo.supportsVod && repo.vodItems.isNotEmpty) ...[
+                  const _RowHeader(title: 'Popular Movies'),
+                  SizedBox(
+                    height: 190,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: repo.vodItems.length.clamp(0, 20),
+                      itemBuilder: (_, i) {
+                        final v = repo.vodItems[i];
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 14),
+                          child: SizedBox(
+                            width: 120,
+                            child: PosterTile(title: v.name, cover: v.cover, autofocus: i == 0, onSelect: () => _openMovie(v)),
+                          ),
                         );
                       },
                     ),
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (repo.supportsVod && repo.seriesItems.isNotEmpty) ...[
+                  const _RowHeader(title: 'Popular Series'),
+                  SizedBox(
+                    height: 190,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: repo.seriesItems.length.clamp(0, 20),
+                      itemBuilder: (_, i) {
+                        final s = repo.seriesItems[i];
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 14),
+                          child: SizedBox(
+                            width: 120,
+                            child: PosterTile(title: s.name, cover: s.cover, onSelect: () => _openSeries(s)),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+                if (mostWatched.isEmpty && (!repo.supportsVod || (repo.vodItems.isEmpty && repo.seriesItems.isEmpty)))
+                  Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      repo.supportsVod
+                          ? 'Watch a few channels to see them here.'
+                          : 'Movies and Series need an Xtream login — not available for an M3U playlist source.\n\nWatch a few channels to see them here.',
+                      style: const TextStyle(color: Colors.white54),
+                    ),
+                  ),
               ]),
             ),
           ]),
@@ -352,21 +350,23 @@ class _HomeScreenState extends State<HomeScreen> {
       ]),
     );
   }
+}
 
-  void _openSearch() async {
-    final c = TextEditingController(text: search);
-    final r = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Search channels'),
-        content: TextField(controller: c, autofocus: true, onSubmitted: (v) => Navigator.pop(context, v)),
-        actions: [TextButton(onPressed: () => Navigator.pop(context, c.text), child: const Text('Search'))],
-      ),
+class _RowHeader extends StatelessWidget {
+  final String title;
+  final Widget? trailing;
+  const _RowHeader({required this.title, this.trailing});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+      child: Row(children: [
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const Spacer(),
+        if (trailing != null) trailing!,
+      ]),
     );
-    if (r != null) setState(() => search = r.trim());
   }
-
-  static String _hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 }
 
 /// One tile in the "Your Most Watched Channels" row — logo + name,
