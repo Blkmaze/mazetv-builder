@@ -27,7 +27,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
   double _progress = 0;
   String? _error;
 
-  static const _activate = {
+  static final _activate = {
     LogicalKeyboardKey.select, LogicalKeyboardKey.enter, LogicalKeyboardKey.numpadEnter,
     LogicalKeyboardKey.gameButtonA, LogicalKeyboardKey.space,
   };
