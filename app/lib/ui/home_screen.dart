@@ -22,7 +22,7 @@ import 'servers_screen.dart';
 import 'settings_screen.dart';
 import 'tv_widgets.dart';
 import 'update_screen.dart';
-import 'vod_player_screen.dart';
+import 'movie_detail_screen.dart';
 import 'watch_party_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -182,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openMovie(VodItem v) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => VodPlayerScreen(item: v)));
+    Navigator.push(context, MaterialPageRoute(builder: (_) => MovieDetailScreen(item: v)));
   }
 
   void _openSeries(SeriesItem s) {

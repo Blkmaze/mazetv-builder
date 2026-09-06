@@ -62,3 +62,24 @@ class SeriesEpisode {
     required this.streamUrl,
   });
 }
+
+
+/// Extra detail Xtream returns from get_vod_info for one movie.
+class VodInfo {
+  final String plot;
+  final String cast;       // comma-separated names as the portal sends them
+  final String director;
+  final String genre;
+  final String duration;   // e.g. "02:10:05" or "130 min" — shown as sent
+  final double rating;
+  final String backdrop;   // first backdrop image url, if any
+  final String trailer;    // YouTube id or url, if any
+
+  const VodInfo({
+    this.plot = '', this.cast = '', this.director = '', this.genre = '',
+    this.duration = '', this.rating = 0, this.backdrop = '', this.trailer = '',
+  });
+
+  List<String> get castList =>
+      cast.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).take(12).toList();
+}

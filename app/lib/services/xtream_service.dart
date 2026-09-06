@@ -131,6 +131,26 @@ class XtreamService {
 
   /// Episodes for one series, flattened and sorted by season then episode
   /// number. Xtream returns these grouped by season under "episodes".
+  Future<VodInfo> vodInfo(String vodId) async {
+    final j = await _get(_api('get_vod_info', {'vod_id': vodId})) as Map<String, dynamic>;
+    final info = (j['info'] is Map) ? j['info'] as Map : const {};
+    String str(String k) => (info[k] ?? '').toString();
+    String backdrop = '';
+    final bd = info['backdrop_path'];
+    if (bd is List && bd.isNotEmpty) backdrop = bd.first.toString();
+    if (bd is String) backdrop = bd;
+    return VodInfo(
+      plot: str('plot').isNotEmpty ? str('plot') : str('description'),
+      cast: str('cast').isNotEmpty ? str('cast') : str('actors'),
+      director: str('director'),
+      genre: str('genre'),
+      duration: str('duration'),
+      rating: _rating(info),
+      backdrop: backdrop,
+      trailer: str('youtube_trailer').isNotEmpty ? str('youtube_trailer') : str('trailer'),
+    );
+  }
+
   Future<List<SeriesEpisode>> seriesEpisodes(String seriesId) async {
     final j = await _get(_api('get_series_info', {'series_id': seriesId})) as Map<String, dynamic>;
     final episodes = <SeriesEpisode>[];

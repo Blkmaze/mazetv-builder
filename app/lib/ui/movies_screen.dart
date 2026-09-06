@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/vod.dart';
 import '../services/channel_repo.dart';
 import 'tv_widgets.dart';
-import 'vod_player_screen.dart';
+import 'movie_detail_screen.dart';
 
 class MoviesScreen extends StatefulWidget {
   const MoviesScreen({super.key});
@@ -42,7 +42,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
   }
 
   void _play(VodItem v) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => VodPlayerScreen(item: v)));
+    Navigator.push(context, MaterialPageRoute(builder: (_) => MovieDetailScreen(item: v)));
   }
 
   @override

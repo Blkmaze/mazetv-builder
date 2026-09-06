@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../models/channel.dart';
 import '../services/channel_repo.dart';
+import '../services/live_stream_tuning.dart';
 import 'tv_widgets.dart';
 
-/// Pick up to 4 live channels to watch at once. Only the tapped cell has
-/// audio; the rest are muted. Playing several streams at once is heavier on
-/// the device than a single full-screen channel — if it stutters, try 2
-/// channels instead of 4.
+/// Pick up to 4 live channels to watch at once.
+///
+/// Remote:
+///   grid      — D-pad moves the highlight; OK expands that cell to full
+///               screen and gives it the audio.
+///   fullscreen — ◀ ▶ switch to the previous/next channel; OK or Back
+///               returns to the grid.
+///
+/// All streams keep playing while one is expanded (the others are kept
+/// alive off-screen), so switching back and forth is instant. Four streams
+/// at once is heavy on a small box — if it stutters, try 2.
 class MultiviewScreen extends StatefulWidget {
   const MultiviewScreen({super.key});
   @override
@@ -17,6 +26,14 @@ class MultiviewScreen extends StatefulWidget {
 
 class _MultiviewScreenState extends State<MultiviewScreen> {
   final List<Channel> picked = [];
+  final List<GlobalKey<_MultiCellState>> keys = [];
+  int liveIndex = 0;   // which cell has audio
+  int? expanded;       // which cell is full screen, if any
+
+  static final _activate = {
+    LogicalKeyboardKey.select, LogicalKeyboardKey.enter, LogicalKeyboardKey.numpadEnter,
+    LogicalKeyboardKey.gameButtonA, LogicalKeyboardKey.space,
+  };
 
   void _pickChannels() async {
     final repo = ChannelRepo.I;
@@ -24,38 +41,94 @@ class _MultiviewScreenState extends State<MultiviewScreen> {
       context,
       MaterialPageRoute(builder: (_) => _ChannelPickerScreen(initiallyPicked: picked, allChannels: repo.channels)),
     );
-    if (result != null) setState(() => picked
-      ..clear()
-      ..addAll(result));
+    if (result == null) return;
+    setState(() {
+      picked..clear()..addAll(result);
+      keys..clear()..addAll(List.generate(picked.length, (_) => GlobalKey<_MultiCellState>()));
+      liveIndex = 0;
+      expanded = null;
+    });
+  }
+
+  void _expand(int i) => setState(() { liveIndex = i; expanded = i; });
+  void _collapse() => setState(() => expanded = null);
+  void _step(int d) {
+    if (picked.isEmpty) return;
+    setState(() {
+      liveIndex = (liveIndex + d) % picked.length;
+      if (liveIndex < 0) liveIndex += picked.length;
+      expanded = liveIndex;
+    });
+  }
+
+  KeyEventResult _fullscreenKeys(FocusNode _, KeyEvent e) {
+    if (e is! KeyDownEvent) return KeyEventResult.ignored;
+    final k = e.logicalKey;
+    if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.channelDown) { _step(-1); return KeyEventResult.handled; }
+    if (k == LogicalKeyboardKey.arrowRight || k == LogicalKeyboardKey.channelUp) { _step(1); return KeyEventResult.handled; }
+    if (_activate.contains(k)) { _collapse(); return KeyEventResult.handled; }
+    return KeyEventResult.ignored;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Multiview'),
-        actions: [IconButton(icon: const Icon(Icons.add), tooltip: 'Pick channels', onPressed: _pickChannels)],
+    // Same cell widgets whether in the grid or expanded — the GlobalKeys let
+    // Flutter move them between layouts without restarting the streams.
+    final cells = [
+      for (var i = 0; i < picked.length; i++)
+        _MultiCell(key: keys[i], channel: picked[i], live: liveIndex == i, expanded: expanded == i,
+            onSelect: () => _expand(i)),
+    ];
+
+    return PopScope(
+      canPop: expanded == null,
+      onPopInvoked: (didPop) { if (!didPop) _collapse(); },
+      child: Scaffold(
+        appBar: expanded != null ? null : AppBar(
+          title: const Text('Multiview'),
+          actions: [IconButton(icon: const Icon(Icons.add), tooltip: 'Pick channels', onPressed: _pickChannels)],
+        ),
+        body: picked.isEmpty
+            ? Center(child: TvButton(label: 'Pick up to 4 channels', icon: Icons.add, autofocus: true, onPressed: _pickChannels))
+            : expanded == null
+                ? GridView.count(
+                    crossAxisCount: picked.length <= 1 ? 1 : 2,
+                    padding: const EdgeInsets.all(8),
+                    mainAxisSpacing: 8, crossAxisSpacing: 8,
+                    childAspectRatio: 16 / 9,
+                    children: cells,
+                  )
+                : Focus(
+                    autofocus: true,
+                    onKeyEvent: _fullscreenKeys,
+                    child: Stack(fit: StackFit.expand, children: [
+                      cells[expanded!],
+                      // keep the others alive, just off-screen
+                      Offstage(offstage: true, child: Row(children: [
+                        for (var i = 0; i < cells.length; i++) if (i != expanded) SizedBox(width: 1, height: 1, child: cells[i]),
+                      ])),
+                      Positioned(
+                        right: 16, bottom: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
+                          child: Text('${expanded! + 1}/${picked.length}   ◀ ▶ switch   OK / Back: grid',
+                              style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                        ),
+                      ),
+                    ]),
+                  ),
       ),
-      body: picked.isEmpty
-          ? Center(
-              child: TvButton(label: 'Pick up to 4 channels', icon: Icons.add, autofocus: true, onPressed: _pickChannels),
-            )
-          : GridView.count(
-              crossAxisCount: picked.length <= 1 ? 1 : 2,
-              padding: const EdgeInsets.all(8),
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: 16 / 9,
-              children: [for (var i = 0; i < picked.length; i++) _MultiCell(channel: picked[i], initiallyLive: i == 0)],
-            ),
     );
   }
 }
 
 class _MultiCell extends StatefulWidget {
   final Channel channel;
-  final bool initiallyLive;
-  const _MultiCell({required this.channel, required this.initiallyLive});
+  final bool live;      // has the audio
+  final bool expanded;  // shown full screen
+  final VoidCallback onSelect;
+  const _MultiCell({super.key, required this.channel, required this.live, required this.expanded, required this.onSelect});
   @override
   State<_MultiCell> createState() => _MultiCellState();
 }
@@ -63,14 +136,20 @@ class _MultiCell extends StatefulWidget {
 class _MultiCellState extends State<_MultiCell> {
   late final Player player = Player(configuration: const PlayerConfiguration(bufferSize: 16 * 1024 * 1024));
   late final VideoController controller = VideoController(player);
-  bool live = false;
 
   @override
   void initState() {
     super.initState();
-    live = widget.initiallyLive;
+    tuneForLiveTs(player, preview: true);
     player.open(Media(widget.channel.streamUrl));
-    player.setVolume(live ? 100 : 0);
+    player.setVolume(widget.live ? 100 : 0);
+  }
+
+  @override
+  void didUpdateWidget(covariant _MultiCell old) {
+    super.didUpdateWidget(old);
+    if (old.live != widget.live) player.setVolume(widget.live ? 100 : 0);
+    if (old.channel.id != widget.channel.id) player.open(Media(widget.channel.streamUrl));
   }
 
   @override
@@ -79,34 +158,61 @@ class _MultiCellState extends State<_MultiCell> {
     super.dispose();
   }
 
-  void _makeLive() {
-    setState(() => live = true);
-    player.setVolume(100);
-  }
-
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    return InkWell(
-      onTap: _makeLive,
-      child: Container(
-        decoration: BoxDecoration(border: Border.all(color: live ? primary : Colors.white24, width: live ? 3 : 1)),
-        child: Stack(fit: StackFit.expand, children: [
-          Video(controller: controller, controls: NoVideoControls),
-          Positioned(
-            left: 6, bottom: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              color: Colors.black54,
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                if (live) Icon(Icons.volume_up, size: 12, color: primary),
-                if (live) const SizedBox(width: 4),
-                Text(widget.channel.name, style: const TextStyle(fontSize: 11, color: Colors.white70)),
-              ]),
-            ),
+    if (widget.expanded) {
+      return Stack(fit: StackFit.expand, children: [
+        Video(controller: controller, controls: NoVideoControls),
+        Positioned(
+          left: 16, bottom: 12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            color: Colors.black54,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.volume_up, size: 14, color: primary), const SizedBox(width: 6),
+              Text(widget.channel.name, style: const TextStyle(fontSize: 14, color: Colors.white)),
+            ]),
           ),
-        ]),
-      ),
+        ),
+      ]);
+    }
+    return Focus(
+      canRequestFocus: false, skipTraversal: true,
+      child: Builder(builder: (ctx) {
+        final focused = Focus.of(ctx).hasFocus;
+        return InkWell(
+          onTap: widget.onSelect,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: focused ? Colors.white : (widget.live ? primary : Colors.white24),
+                width: focused ? 4 : (widget.live ? 3 : 1),
+              ),
+            ),
+            child: Stack(fit: StackFit.expand, children: [
+              Video(controller: controller, controls: NoVideoControls),
+              Positioned(
+                left: 6, bottom: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  color: Colors.black54,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (widget.live) Icon(Icons.volume_up, size: 12, color: primary),
+                    if (widget.live) const SizedBox(width: 4),
+                    Text(widget.channel.name, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                  ]),
+                ),
+              ),
+              if (focused)
+                const Positioned(
+                  right: 6, bottom: 6,
+                  child: Text('OK: full screen', style: TextStyle(fontSize: 10, color: Colors.white70)),
+                ),
+            ]),
+          ),
+        );
+      }),
     );
   }
 }
