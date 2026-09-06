@@ -145,17 +145,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   bool _catalogsLoading = false;
+  String? _catalogError;
 
   Future<void> _loadCatalogs() async {
     if (!repo.supportsVod || _catalogsLoading) return;
     _catalogsLoading = true;
+    _catalogError = null;
+    if (mounted) setState(() {});
     try {
       if (repo.vodItems.isEmpty) {
-        try { await repo.loadVod(); } catch (_) {}
+        try { await repo.loadVod(); } catch (e) { _catalogError = 'Movies: ${scrubSecrets(e)}'; }
         if (mounted) setState(() {});
       }
       if (repo.seriesItems.isEmpty) {
-        try { await repo.loadSeries(); } catch (_) {}
+        try { await repo.loadSeries(); } catch (e) {
+          _catalogError = '${_catalogError == null ? '' : '$_catalogError\n'}Series: ${scrubSecrets(e)}';
+        }
         if (mounted) setState(() {});
       }
     } finally {
@@ -370,7 +375,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text('Loading movies & series…', style: TextStyle(color: Colors.white54)),
                     ]),
                   ),
-                if (mostWatched.isEmpty && popularMovies.isEmpty && popularSeries.isEmpty && !_catalogsLoading)
+                if (_catalogError != null && !_catalogsLoading)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Row(children: [
+                      const Icon(Icons.error_outline, color: Colors.redAccent, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text('Couldn\'t load the catalog — $_catalogError',
+                          maxLines: 3, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                      const SizedBox(width: 12),
+                      TvButton(label: 'Retry', icon: Icons.refresh, onPressed: _loadCatalogs),
+                    ]),
+                  ),
+                if (mostWatched.isEmpty && popularMovies.isEmpty && popularSeries.isEmpty && !_catalogsLoading && _catalogError == null)
                   Padding(
                     padding: const EdgeInsets.all(32),
                     child: Text(

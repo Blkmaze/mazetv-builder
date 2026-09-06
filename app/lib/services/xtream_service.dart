@@ -17,10 +17,12 @@ class XtreamService {
       '${action == null ? '' : '&action=$action'}'
       '${extra == null ? '' : extra.entries.map((e) => '&${e.key}=${Uri.encodeComponent(e.value)}').join()}');
 
-  Future<dynamic> _get(Uri u) async {
+  /// [timeout] defaults to 20s; the VOD/series catalogs can be tens of MB
+  /// of JSON on a big provider, so those calls pass a much longer one.
+  Future<dynamic> _get(Uri u, {Duration timeout = const Duration(seconds: 20)}) async {
     http.Response r;
     try {
-      r = await http.get(u).timeout(const Duration(seconds: 20));
+      r = await http.get(u).timeout(timeout);
     } catch (e) {
       throw Exception('Could not reach ${u.host}:${u.port} — ${_plain(e)}');
     }
@@ -83,11 +85,11 @@ class XtreamService {
   // ---- VOD (movies) --------------------------------------------------------
 
   Future<List<VodItem>> vodItems() async {
-    final cats = await _get(_api('get_vod_categories')) as List;
+    final cats = await _get(_api('get_vod_categories'), timeout: const Duration(seconds: 60)) as List;
     final catName = {
       for (final c in cats) c['category_id'].toString(): (c['category_name'] ?? '').toString()
     };
-    final streams = await _get(_api('get_vod_streams')) as List;
+    final streams = await _get(_api('get_vod_streams'), timeout: const Duration(seconds: 120)) as List;
     return streams.map((s) {
       final id = s['stream_id'].toString();
       final ext = (s['container_extension'] ?? 'mp4').toString();
@@ -108,11 +110,11 @@ class XtreamService {
   // ---- Series ---------------------------------------------------------------
 
   Future<List<SeriesItem>> seriesItems() async {
-    final cats = await _get(_api('get_series_categories')) as List;
+    final cats = await _get(_api('get_series_categories'), timeout: const Duration(seconds: 60)) as List;
     final catName = {
       for (final c in cats) c['category_id'].toString(): (c['category_name'] ?? '').toString()
     };
-    final list = await _get(_api('get_series')) as List;
+    final list = await _get(_api('get_series'), timeout: const Duration(seconds: 120)) as List;
     return list.map((s) {
       return SeriesItem(
         id: s['series_id'].toString(),
