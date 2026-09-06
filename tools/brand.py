@@ -53,7 +53,7 @@ with open(f"{P}/assets/branding.json", "w") as f:
         "epg_url": a.epg_url, "vpn_config_url": a.vpn_url, "support_text": a.support_text,
         "portals": portals, "pair_base_url": a.pair_base_url,
         "repo": a.repo, "build_number": int(a.build_number or 0),
-        "has_custom_logo": bool(a.icon),
+        "has_custom_logo": True,
     }, f, indent=2)
 print("[brand] wrote branding.json")
 
@@ -101,11 +101,18 @@ open(man, "w").write(s)
 print("[brand] manifest patched for Android TV")
 
 # 4. icons -------------------------------------------------------------------
+# The repo's stock icon, used whenever a build doesn't supply --icon. Lives
+# next to this script so it resolves no matter what the working directory is.
+DEFAULT_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "brand-assets", "mazetv-rings-play.png")
+
 def load_icon():
     if a.icon:
         data = urllib.request.urlopen(a.icon).read() if a.icon.startswith("http") else open(a.icon, "rb").read()
         return Image.open(io.BytesIO(data)).convert("RGBA")
-    # auto: colored rounded square with initials
+    if os.path.exists(DEFAULT_ICON):
+        print("[brand] no --icon given; using the repo default icon")
+        return Image.open(DEFAULT_ICON).convert("RGBA")
+    # last resort: colored rounded square with initials
     img = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.rounded_rectangle((0, 0, 511, 511), radius=96, fill=color)
