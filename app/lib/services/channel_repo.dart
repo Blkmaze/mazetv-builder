@@ -13,7 +13,22 @@ class ChannelRepo {
   static final ChannelRepo I = ChannelRepo._();
   ChannelRepo._();
 
+  /// Everything the server sent. [channels] is this after [hdOnly] filtering.
+  List<Channel> allChannels = [];
   List<Channel> channels = [];
+
+  /// When on, hide SD duplicates and keep only channels tagged HD/FHD/UHD/4K.
+  /// If a provider doesn't tag quality at all, the filter would empty the
+  /// list — in that case it quietly leaves everything visible.
+  bool hdOnly = false;
+  static final _hdTag = RegExp(r'\b(HD|FHD|UHD|4K|8K|1080p?|2160p?|720p?)\b', caseSensitive: false);
+  static final _sdTag = RegExp(r'\bSD\b', caseSensitive: false);
+
+  void applyFilters() {
+    if (!hdOnly) { channels = List.of(allChannels); return; }
+    final kept = allChannels.where((c) => _hdTag.hasMatch(c.name) && !_sdTag.hasMatch(c.name)).toList();
+    channels = kept.length >= allChannels.length * 0.15 ? kept : List.of(allChannels);
+  }
   final EpgService epg = EpgService();
   String epgUrl = '';
 
@@ -24,11 +39,13 @@ class ChannelRepo {
     if (a.type == SourceType.xtream) {
       final x = XtreamService(a);
       await x.login();
-      channels = await x.liveChannels();
+      allChannels = await x.liveChannels();
+      applyFilters();
       epgUrl = a.epgUrl.isNotEmpty ? a.epgUrl : x.epgUrl;
     } else {
       final r = await M3uService.fetch(a.host);
-      channels = r.channels;
+      allChannels = r.channels;
+      applyFilters();
       epgUrl = a.epgUrl.isNotEmpty ? a.epgUrl : (r.epgUrl.isNotEmpty ? r.epgUrl : fallbackEpg);
     }
   }
@@ -166,12 +183,15 @@ class ChannelRepo {
     final cutoffAdded = DateTime.now().subtract(const Duration(days: 120)).millisecondsSinceEpoch ~/ 1000;
     final recent = items.where((i) => year(i) >= cutoffYear || added(i) >= cutoffAdded).toList();
     final pool = recent.length >= 8 ? recent : items;
+    // Newest release first, then most recently added, then rating — that's
+    // what surfaces this year's titles the way Ghost's row does, instead of
+    // well-rated classics from decades ago.
     int cmp(T a, T b) {
-      final r = rating(b).compareTo(rating(a));
-      if (r != 0) return r;
       final y = year(b).compareTo(year(a));
       if (y != 0) return y;
-      return added(b).compareTo(added(a));
+      final ad = added(b).compareTo(added(a));
+      if (ad != 0) return ad;
+      return rating(b).compareTo(rating(a));
     }
     final sorted = [...pool]..sort(cmp);
     return sorted.take(take).toList();

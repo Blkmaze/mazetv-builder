@@ -187,6 +187,22 @@ class Storage {
     await p.remove(_kColorOverride);
   }
 
+  // ---- appearance: background color override -------------------------------
+  static const _kBgOverride = 'bg_override_argb';
+  static Future<int?> bgOverride() async => (await SharedPreferences.getInstance()).getInt(_kBgOverride);
+  static Future<void> setBgOverride(int argb) async => (await SharedPreferences.getInstance()).setInt(_kBgOverride, argb);
+  static Future<void> clearBgOverride() async => (await SharedPreferences.getInstance()).remove(_kBgOverride);
+
+  // ---- playback preferences ----------------------------------------------
+  static const _kHdOnly = 'hd_only_channels';
+  static Future<bool> hdOnly() async => (await SharedPreferences.getInstance()).getBool(_kHdOnly) ?? false;
+  static Future<void> setHdOnly(bool v) async => (await SharedPreferences.getInstance()).setBool(_kHdOnly, v);
+
+  /// 0 = small, 1 = medium (default), 2 = large.
+  static const _kBufferLevel = 'buffer_level';
+  static Future<int> bufferLevel() async => (await SharedPreferences.getInstance()).getInt(_kBufferLevel) ?? 1;
+  static Future<void> setBufferLevel(int v) async => (await SharedPreferences.getInstance()).setInt(_kBufferLevel, v);
+
   // ---- Settings PIN lock --------------------------------------------------
   static const _kPin = 'settings_pin';
 

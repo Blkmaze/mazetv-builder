@@ -31,6 +31,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool refreshing = false;
   bool softwareDecode = false;
   bool resumeLastChannel = false;
+  bool hdOnly = false;
+  int bufferLevel = 1;
   String? pin;
   int recordingCount = 0;
   int recordingBytes = 0;
@@ -48,10 +50,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadPrefs() async {
     final p = await SharedPreferences.getInstance();
     final savedPin = await Storage.settingsPin();
+    final savedHd = await Storage.hdOnly();
+    final savedBuf = await Storage.bufferLevel();
     if (!mounted) return;
     setState(() {
       softwareDecode = p.getBool(kForceSoftwareDecodeKey) ?? false;
       resumeLastChannel = p.getBool(_kResumeLastChannel) ?? false;
+      hdOnly = savedHd;
+      bufferLevel = savedBuf;
       pin = savedPin;
     });
   }
@@ -219,7 +225,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _setBool(kForceSoftwareDecodeKey, v);
             },
           ),
+          TvTile(
+            leading: const Icon(Icons.storage),
+            title: const Text('Buffer size'),
+            subtitle: Text(const ['Small — quickest channel start', 'Medium — balanced (default)', 'Large — smoothest on rough connections'][bufferLevel.clamp(0, 2)]),
+            onSelect: () async {
+              final v = await showDialog<int>(
+                context: context,
+                builder: (_) => SimpleDialog(
+                  title: const Text('Buffer size'),
+                  children: [
+                    for (final e in const [(0, 'Small'), (1, 'Medium'), (2, 'Large')])
+                      SimpleDialogOption(
+                        onPressed: () => Navigator.pop(context, e.$1),
+                        child: Text(e.$2, style: TextStyle(fontWeight: e.$1 == bufferLevel ? FontWeight.bold : FontWeight.normal)),
+                      ),
+                  ],
+                ),
+              );
+              if (v == null) return;
+              setState(() => bufferLevel = v);
+              await Storage.setBufferLevel(v);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Applies the next time a channel starts')));
+              }
+            },
+          ),
           const _SectionHeader('Playback'),
+          SwitchListTile(
+            secondary: const Icon(Icons.hd),
+            title: const Text('Only show HD / 4K channels'),
+            subtitle: const Text('Hides SD duplicates. Ignored if your playlist doesn\'t tag quality.'),
+            value: hdOnly,
+            onChanged: (v) {
+              setState(() => hdOnly = v);
+              Storage.setHdOnly(v);
+              ChannelRepo.I.hdOnly = v;
+              ChannelRepo.I.applyFilters();
+            },
+          ),
           SwitchListTile(
             secondary: const Icon(Icons.play_circle_outline),
             title: const Text('Resume last channel on launch'),

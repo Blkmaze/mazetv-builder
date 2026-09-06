@@ -23,9 +23,12 @@ class MazeTvApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = Branding.I;
-    return ValueListenableBuilder<Color>(
-      valueListenable: ThemeController.primaryColor,
-      builder: (context, accent, _) => MaterialApp(
+    return AnimatedBuilder(
+      animation: Listenable.merge([ThemeController.primaryColor, ThemeController.background]),
+      builder: (context, _) {
+        final accent = ThemeController.primaryColor.value;
+        final bg = ThemeController.background.value;
+        return MaterialApp(
         title: b.appName,
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
@@ -35,14 +38,15 @@ class MazeTvApp extends StatelessWidget {
             brightness: Brightness.dark,
             primary: accent,
           ),
-          scaffoldBackgroundColor: const Color(0xFF0E0E10),
+          scaffoldBackgroundColor: bg,
           // TV-safe defaults: big text, visible focus.
           textTheme: const TextTheme(bodyMedium: TextStyle(fontSize: 18)),
           listTileTheme: const ListTileThemeData(minVerticalPadding: 12),
           focusColor: accent.withOpacity(0.35),
         ),
         home: SplashScreen(next: startLoggedIn ? const HomeScreen() : const LoginScreen()),
-      ),
+        );
+      },
     );
   }
 }

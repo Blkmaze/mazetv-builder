@@ -5,7 +5,6 @@ import '../models/channel.dart';
 import '../models/profile.dart';
 import '../models/vod.dart';
 import '../services/channel_repo.dart';
-import '../services/ota_installer.dart';
 import '../services/ota_service.dart';
 import '../services/storage.dart';
 import 'catchup_screen.dart';
@@ -22,6 +21,7 @@ import 'series_screen.dart';
 import 'servers_screen.dart';
 import 'settings_screen.dart';
 import 'tv_widgets.dart';
+import 'update_screen.dart';
 import 'vod_player_screen.dart';
 import 'watch_party_screen.dart';
 
@@ -50,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (repo.channels.isEmpty) {
         final servers = await Storage.loadServers();
         if (servers.isEmpty) { _logout(); return; }
+        repo.hdOnly = await Storage.hdOnly();
         await repo.loadFailover(servers, fallbackEpg: Branding.I.epgUrl);
       }
 
@@ -64,15 +65,11 @@ class _HomeScreenState extends State<HomeScreen> {
       activeProfileId ??= await Storage.activeProfileId();
 
       await _loadMostWatched();
-      // Posters are the whole point of this page — worth the wait, and the
-      // API calls are skipped entirely for an M3U source (supportsVod false).
-      if (repo.supportsVod) {
-        if (repo.vodItems.isEmpty) await repo.loadVod();
-        if (repo.seriesItems.isEmpty) await repo.loadSeries();
-      }
-
       if (!mounted) return;
       setState(() => loading = false);
+      // Catalogs can be thousands of titles — never hold the whole screen
+      // hostage for them. The rows fill in as each one lands.
+      _loadCatalogs();
       repo.loadEpg();
       _checkForUpdate();
     } catch (e) {
@@ -95,11 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final skipped = await Storage.otaSkippedBuild();
       if (skipped == update.build) return;
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => _UpdateDialog(update: update),
-      );
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => UpdateScreen(update: update)));
     } catch (_) {
       // OTA check is best-effort; never interrupt normal use over it.
     }
@@ -149,6 +142,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _playMostWatched(int index) async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(playlist: mostWatched, index: index)));
     await _loadMostWatched();
+  }
+
+  bool _catalogsLoading = false;
+
+  Future<void> _loadCatalogs() async {
+    if (!repo.supportsVod || _catalogsLoading) return;
+    _catalogsLoading = true;
+    try {
+      if (repo.vodItems.isEmpty) {
+        try { await repo.loadVod(); } catch (_) {}
+        if (mounted) setState(() {});
+      }
+      if (repo.seriesItems.isEmpty) {
+        try { await repo.loadSeries(); } catch (_) {}
+        if (mounted) setState(() {});
+      }
+    } finally {
+      _catalogsLoading = false;
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _loadMostWatched() async {
@@ -348,7 +361,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
-                if (mostWatched.isEmpty && popularMovies.isEmpty && popularSeries.isEmpty)
+                if (repo.supportsVod && _catalogsLoading && popularMovies.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 24, 20, 8),
+                    child: Row(children: [
+                      SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                      SizedBox(width: 12),
+                      Text('Loading movies & series…', style: TextStyle(color: Colors.white54)),
+                    ]),
+                  ),
+                if (mostWatched.isEmpty && popularMovies.isEmpty && popularSeries.isEmpty && !_catalogsLoading)
                   Padding(
                     padding: const EdgeInsets.all(32),
                     child: Text(
@@ -420,137 +442,6 @@ class _MostWatchedTile extends StatelessWidget {
           ),
         );
       }),
-    );
-  }
-}
-
-
-/// The "update available" dialog. It owns its own FocusNode and forces
-/// focus onto "Update now" after the first frame — relying on `autofocus`
-/// alone loses a race with the Home screen underneath (which has already
-/// grabbed focus by the time the network check finishes), leaving the
-/// button visible but unselectable from the remote.
-class _UpdateDialog extends StatefulWidget {
-  final OtaUpdate update;
-  const _UpdateDialog({required this.update});
-  @override
-  State<_UpdateDialog> createState() => _UpdateDialogState();
-}
-
-class _UpdateDialogState extends State<_UpdateDialog> {
-  final _updateFocus = FocusNode();
-  bool _downloading = false;
-  double _progress = 0;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _grabFocus(attempts: 3);
-  }
-
-  /// The dialog route's focus scope may not be current on the very first
-  /// frame; try a few frames in a row so the button reliably ends up focused.
-  void _grabFocus({required int attempts}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (!_updateFocus.hasFocus) _updateFocus.requestFocus();
-      if (!_updateFocus.hasFocus && attempts > 1) _grabFocus(attempts: attempts - 1);
-    });
-  }
-
-  @override
-  void dispose() {
-    _updateFocus.dispose();
-    super.dispose();
-  }
-
-  Future<void> _startUpdate() async {
-    setState(() { _downloading = true; _progress = 0; _error = null; });
-    try {
-      await OtaInstaller.downloadAndInstall(
-        widget.update,
-        onProgress: (p) { if (mounted) setState(() => _progress = p); },
-      );
-      // Installer is now on screen (Android's own UI). Close our dialog so
-      // the app is in a clean state when it's relaunched on the new build.
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _downloading = false;
-          _error = scrubSecrets(e);
-        });
-        WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _updateFocus.requestFocus(); });
-      }
-    }
-  }
-
-  static String _formatSize(int bytes) =>
-      bytes < 1024 * 1024 ? '${(bytes / 1024).round()} KB' : '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-
-  @override
-  Widget build(BuildContext context) {
-    final update = widget.update;
-    return Dialog(
-      backgroundColor: const Color(0xFF15161C),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 36, 32, 28),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.white70, width: 2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.file_download_outlined, color: Colors.white70, size: 30),
-          ),
-          const SizedBox(height: 20),
-          const Text('Update available', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Text(
-            'A new version (build ${update.build}) is available.'
-            '${update.sizeBytes > 0 ? ' (${_formatSize(update.sizeBytes)})' : ''}',
-            textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70),
-          ),
-          Text('You are on build ${Branding.I.buildNumber}.',
-              textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-          const SizedBox(height: 24),
-          if (_downloading) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(value: _progress, minHeight: 10, backgroundColor: Colors.white12),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              _progress >= 1.0 ? 'Opening installer…' : 'Downloading… ${(_progress * 100).round()}%',
-              style: const TextStyle(color: Colors.white70),
-            ),
-          ] else ...[
-            if (_error != null) ...[
-              Text(_error!, textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
-              const SizedBox(height: 14),
-            ],
-            SizedBox(
-              width: double.infinity,
-              child: TvButton(
-                label: _error == null ? 'Update now' : 'Try again',
-                icon: Icons.file_download_outlined,
-                autofocus: true, // proven to work in the field; requestFocus below is the backup
-                focusNode: _updateFocus,
-                onPressed: _startUpdate,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Remind me later', style: TextStyle(color: Colors.white54)),
-            ),
-          ],
-        ]),
-      ),
     );
   }
 }

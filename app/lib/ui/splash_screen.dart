@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../config/branding.dart';
+import '../config/theme_controller.dart';
 
 /// Launch splash: the brand logo scales/fades in over expanding ripple
 /// rings, holds a beat, then flies into its spot in the Home header (a
@@ -47,7 +48,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     final b = Branding.I;
     return Scaffold(
-      backgroundColor: const Color(0xFF0E0E10),
+      backgroundColor: ThemeController.background.value,
       body: AnimatedBuilder(
         animation: _c,
         builder: (_, __) => Stack(alignment: Alignment.center, children: [

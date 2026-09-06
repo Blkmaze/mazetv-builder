@@ -1,4 +1,5 @@
 import 'package:media_kit/media_kit.dart';
+import 'storage.dart';
 
 /// Tunes a libmpv-backed Player for live IPTV over plain HTTP.
 ///
@@ -24,6 +25,13 @@ Future<void> tuneForLiveTs(Player player, {bool preview = false}) async {
   final platform = player.platform;
   if (platform is! NativePlayer) return;
 
+  // Settings → Player → Buffer size. Small suits low-RAM sticks; large rides
+  // out rough connections at the cost of a slower channel start.
+  final level = await Storage.bufferLevel();
+  final secs = preview ? '4' : ['6', '12', '20'][level.clamp(0, 2)];
+  final fwd  = preview ? '8MiB' : ['24MiB', '48MiB', '96MiB'][level.clamp(0, 2)];
+  final back = preview ? '2MiB' : ['4MiB', '8MiB', '16MiB'][level.clamp(0, 2)];
+
   final props = <String, String>{
     // Non-seekable TS otherwise trips "stream error; force-seekable".
     'force-seekable': 'yes',
@@ -37,9 +45,9 @@ Future<void> tuneForLiveTs(Player player, {bool preview = false}) async {
     'cache': 'yes',
     'cache-pause-initial': 'yes',
     'cache-pause-wait': '2',
-    'demuxer-readahead-secs': preview ? '4' : '12',
-    'demuxer-max-bytes': preview ? '8MiB' : '48MiB',
-    'demuxer-max-back-bytes': preview ? '2MiB' : '8MiB',
+    'demuxer-readahead-secs': secs,
+    'demuxer-max-bytes': fwd,
+    'demuxer-max-back-bytes': back,
     // Only use hardware decoders known to be safe; "auto" will happily pick
     // a broken vendor decoder and take the app down with it.
     'hwdec': 'auto-safe',
