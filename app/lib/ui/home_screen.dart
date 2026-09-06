@@ -385,8 +385,16 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   @override
   void initState() {
     super.initState();
+    _grabFocus(attempts: 3);
+  }
+
+  /// The dialog route's focus scope may not be current on the very first
+  /// frame; try a few frames in a row so the button reliably ends up focused.
+  void _grabFocus({required int attempts}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _updateFocus.requestFocus();
+      if (!mounted) return;
+      if (!_updateFocus.hasFocus) _updateFocus.requestFocus();
+      if (!_updateFocus.hasFocus && attempts > 1) _grabFocus(attempts: attempts - 1);
     });
   }
 
@@ -469,6 +477,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
               child: TvButton(
                 label: _error == null ? 'Update now' : 'Try again',
                 icon: Icons.file_download_outlined,
+                autofocus: true, // proven to work in the field; requestFocus below is the backup
                 focusNode: _updateFocus,
                 onPressed: _startUpdate,
               ),
