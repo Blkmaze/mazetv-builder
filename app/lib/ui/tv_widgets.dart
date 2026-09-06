@@ -259,12 +259,14 @@ class TvButton extends StatelessWidget {
   final IconData? icon;
   final VoidCallback onPressed;
   final bool autofocus;
-  const TvButton({super.key, required this.label, required this.onPressed, this.icon, this.autofocus = false});
+  final FocusNode? focusNode;
+  const TvButton({super.key, required this.label, required this.onPressed, this.icon, this.autofocus = false, this.focusNode});
 
   @override
   Widget build(BuildContext context) {
     return FilledButton.icon(
       autofocus: autofocus,
+      focusNode: focusNode,
       onPressed: onPressed,
       icon: Icon(icon ?? Icons.chevron_right),
       label: Padding(

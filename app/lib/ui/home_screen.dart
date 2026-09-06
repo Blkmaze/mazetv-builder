@@ -95,48 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       final choice = await showDialog<String>(
         context: context,
-        builder: (_) => Dialog(
-          backgroundColor: const Color(0xFF15161C),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(32, 36, 32, 28),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                width: 56, height: 56,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white70, width: 2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.file_download_outlined, color: Colors.white70, size: 30),
-              ),
-              const SizedBox(height: 20),
-              const Text('Update available', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              Text(
-                'A new version (build ${update.build}) is available.'
-                '${update.sizeBytes > 0 ? ' (${_formatSize(update.sizeBytes)})' : ''}',
-                textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70),
-              ),
-              Text('You are on build ${Branding.I.buildNumber}.',
-                  textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: TvButton(
-                  label: 'Update now',
-                  icon: Icons.file_download_outlined,
-                  autofocus: true,
-                  onPressed: () => Navigator.pop(context, 'update'),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => Navigator.pop(context, 'later'),
-                child: const Text('Remind me later', style: TextStyle(color: Colors.white54)),
-              ),
-            ]),
-          ),
-        ),
+        builder: (_) => _UpdateDialog(update: update),
       );
       if (choice == 'update') {
         await launchUrl(Uri.parse(update.downloadUrl), mode: LaunchMode.externalApplication);
@@ -145,9 +104,6 @@ class _HomeScreenState extends State<HomeScreen> {
       // OTA check is best-effort; never interrupt normal use over it.
     }
   }
-
-  static String _formatSize(int bytes) =>
-      bytes < 1024 * 1024 ? '${(bytes / 1024).round()} KB' : '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 
   void _logout() async {
     await Storage.clear();
@@ -405,6 +361,87 @@ class _MostWatchedTile extends StatelessWidget {
           ),
         );
       }),
+    );
+  }
+}
+
+
+/// The "update available" dialog. It owns its own FocusNode and forces
+/// focus onto "Update now" after the first frame — relying on `autofocus`
+/// alone loses a race with the Home screen underneath (which has already
+/// grabbed focus by the time the network check finishes), leaving the
+/// button visible but unselectable from the remote.
+class _UpdateDialog extends StatefulWidget {
+  final OtaUpdate update;
+  const _UpdateDialog({required this.update});
+  @override
+  State<_UpdateDialog> createState() => _UpdateDialogState();
+}
+
+class _UpdateDialogState extends State<_UpdateDialog> {
+  final _updateFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updateFocus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _updateFocus.dispose();
+    super.dispose();
+  }
+
+  static String _formatSize(int bytes) =>
+      bytes < 1024 * 1024 ? '${(bytes / 1024).round()} KB' : '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+
+  @override
+  Widget build(BuildContext context) {
+    final update = widget.update;
+    return Dialog(
+      backgroundColor: const Color(0xFF15161C),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 36, 32, 28),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 56, height: 56,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.white70, width: 2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.file_download_outlined, color: Colors.white70, size: 30),
+          ),
+          const SizedBox(height: 20),
+          const Text('Update available', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Text(
+            'A new version (build ${update.build}) is available.'
+            '${update.sizeBytes > 0 ? ' (${_formatSize(update.sizeBytes)})' : ''}',
+            textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70),
+          ),
+          Text('You are on build ${Branding.I.buildNumber}.',
+              textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: TvButton(
+              label: 'Update now',
+              icon: Icons.file_download_outlined,
+              focusNode: _updateFocus,
+              onPressed: () => Navigator.pop(context, 'update'),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'later'),
+            child: const Text('Remind me later', style: TextStyle(color: Colors.white54)),
+          ),
+        ]),
+      ),
     );
   }
 }
