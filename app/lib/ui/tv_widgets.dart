@@ -399,7 +399,8 @@ class _TvTextFieldState extends State<TvTextField> {
         obscureText: widget.obscure,
         autofocus: widget.autofocus,
         textInputAction: widget.last ? TextInputAction.done : TextInputAction.next,
-        onSubmitted: (_) => widget.last ? node.unfocus() : node.nextFocus(),
+        // No onSubmitted: TextInputAction.next/done already move or close focus.
+        // Doing it here too moved focus twice and skipped the next field.
         style: const TextStyle(fontSize: 20),
         decoration: InputDecoration(labelText: widget.label, border: const OutlineInputBorder()),
       ),

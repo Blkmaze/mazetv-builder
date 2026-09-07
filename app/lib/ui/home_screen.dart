@@ -238,9 +238,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? const SizedBox.shrink()
                 : ImageFiltered(
                     key: ValueKey(_backdrop),
-                    imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+                    imageFilter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Opacity(
-                      opacity: 0.35,
+                      opacity: 0.55,
                       child: Image.network(_backdrop, fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => const SizedBox.shrink()),
                     ),
@@ -252,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                colors: [Colors.black.withOpacity(0.25), Colors.black.withOpacity(0.75)],
+                colors: [Colors.black.withOpacity(0.15), Colors.black.withOpacity(0.85)],
               ),
             ),
           ),

@@ -70,8 +70,8 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
         if (backdrop.isNotEmpty)
           Positioned.fill(
             child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-              child: Opacity(opacity: 0.35,
+              imageFilter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: Opacity(opacity: 0.5,
                   child: Image.network(backdrop, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox())),
             ),
           ),
