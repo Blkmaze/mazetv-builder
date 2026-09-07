@@ -8,23 +8,18 @@ import '../models/vod.dart';
 import '../services/channel_repo.dart';
 import '../services/ota_service.dart';
 import '../services/storage.dart';
-import 'catchup_screen.dart';
 import 'live_channels_screen.dart';
 import 'login_screen.dart';
-import 'movies_screen.dart';
-import 'multiview_screen.dart';
 import 'pin_screen.dart';
 import 'player_screen.dart';
 import 'profiles_screen.dart';
-import 'recordings_screen.dart';
 import 'series_detail_screen.dart';
-import 'series_screen.dart';
+import 'section_rail.dart';
 import 'servers_screen.dart';
 import 'settings_screen.dart';
 import 'tv_widgets.dart';
 import 'update_screen.dart';
 import 'movie_detail_screen.dart';
-import 'watch_party_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -314,28 +309,13 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: Row(children: [
             // ---- collapsible icon nav (expands to labels while focus is inside it)
-            TvNavRail(itemsBuilder: (expanded) => [
-              const SizedBox(height: 8),
-              TvRailTile(icon: Icons.search, label: 'Search', expanded: expanded, onSelect: _openSearch),
-              TvRailTile(icon: Icons.home, label: 'Home', expanded: expanded,
-                  autofocus: !(repo.supportsVod && repo.vodItems.isNotEmpty), onSelect: () {}),
-              TvRailTile(icon: Icons.live_tv, label: 'Live', expanded: expanded, onSelect: () => _openLive()),
-              TvRailTile(icon: Icons.history, label: 'Catchup', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CatchupScreen()))),
-              TvRailTile(icon: Icons.movie, label: 'Movies', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MoviesScreen()))),
-              TvRailTile(icon: Icons.video_library, label: 'Series', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SeriesScreen()))),
-              TvRailTile(icon: Icons.groups, label: 'Watch Party', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WatchPartyScreen()))),
-              TvRailTile(icon: Icons.grid_view, label: 'Multiview', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiviewScreen()))),
-              TvRailTile(icon: Icons.fiber_manual_record, label: 'Recordings', expanded: expanded,
-                  onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RecordingsScreen()))),
-              const SizedBox(height: 24),
-              TvRailTile(icon: Icons.settings, label: 'Settings', expanded: expanded, onSelect: _openSettings),
-              const SizedBox(height: 8),
-            ]),
+            SectionRail(
+              current: AppSection.home,
+              homeAutofocus: !(repo.supportsVod && repo.vodItems.isNotEmpty),
+              onSearch: _openSearch,
+              onSettings: _openSettings,
+              onReturn: _loadMostWatched,
+            ),
             const VerticalDivider(width: 1),
             // ---- discovery: most-watched channels, then Movies/Series posters
             Expanded(

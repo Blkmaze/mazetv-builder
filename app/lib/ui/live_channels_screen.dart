@@ -6,6 +6,7 @@ import '../services/channel_repo.dart';
 import '../services/storage.dart';
 import 'live_preview.dart';
 import 'player_screen.dart';
+import 'section_rail.dart';
 import 'tv_widgets.dart';
 
 const String kFavoritesGroup = '★ Favorites';
@@ -32,6 +33,7 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
   final previewChannel = ValueNotifier<Channel?>(null);
   int _offsetMin = 0;          // how far the timeline is scrolled ahead of now
   final _listFocus = FocusNode();
+  final _railFocus = FocusNode();
   Timer? _clock;
 
   // Timeline geometry (shared by the header and every row so they line up).
@@ -51,6 +53,7 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
   void dispose() {
     _clock?.cancel();
     _listFocus.dispose();
+    _railFocus.dispose();
     previewChannel.dispose();
     super.dispose();
   }
@@ -100,13 +103,19 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
     return DateTime(now.year, now.month, now.day, now.hour, now.minute < 30 ? 0 : 30).add(Duration(minutes: _offsetMin));
   }
 
-  /// ▶ from the categories pane goes straight into this category's channel
+  /// ◀ from the categories pane jumps to the section rail; ▶ goes straight
+  /// into this category's channel
   /// list (the highlighted channel if there is one, else the first row).
   /// Without this, Flutter's geometry-based traversal often picks the search
   /// icon in the app bar instead, because it's the nearest focusable thing
   /// "to the right" when the category is far down the list.
   KeyEventResult _categoryKeys(FocusNode _, KeyEvent e) {
-    if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.arrowRight) return KeyEventResult.ignored;
+    if (e is! KeyDownEvent) return KeyEventResult.ignored;
+    if (e.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _railFocus.requestFocus(); // ◀ = jump to the section rail
+      return KeyEventResult.handled;
+    }
+    if (e.logicalKey != LogicalKeyboardKey.arrowRight) return KeyEventResult.ignored;
     final rows = _listFocus.traversalDescendants.toList();
     if (rows.isEmpty) return KeyEventResult.handled; // nothing to go to yet — stay put
     FocusNode? target;
@@ -181,7 +190,10 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
           IconButton(icon: const Icon(Icons.search), tooltip: 'Search', onPressed: _openSearch),
         ],
       ),
-      body: Column(children: [
+      body: Row(children: [
+        SectionRail(current: AppSection.live, railFocus: _railFocus),
+        const VerticalDivider(width: 1),
+        Expanded(child: Column(children: [
         ValueListenableBuilder<Channel?>(
           valueListenable: previewChannel,
           builder: (_, ch, __) => LivePreviewStrip(key: const ValueKey('live-preview'), channel: ch),
@@ -278,6 +290,7 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
             ),
           ]),
         ),
+        ])),
       ]),
     );
   }

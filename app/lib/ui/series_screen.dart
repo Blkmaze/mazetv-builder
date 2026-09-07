@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/vod.dart';
 import '../services/channel_repo.dart';
 import 'series_detail_screen.dart';
+import 'section_rail.dart';
 import 'tv_widgets.dart';
 
 class SeriesScreen extends StatefulWidget {
@@ -11,6 +12,7 @@ class SeriesScreen extends StatefulWidget {
 }
 
 class _SeriesScreenState extends State<SeriesScreen> {
+  final _railFocus = FocusNode();
   final repo = ChannelRepo.I;
   bool loading = true;
   String? error;
@@ -46,10 +48,19 @@ class _SeriesScreenState extends State<SeriesScreen> {
   }
 
   @override
+  void dispose() {
+    _railFocus.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Series')),
-      body: loading
+      body: Row(children: [
+        SectionRail(current: AppSection.series, railFocus: _railFocus),
+        const VerticalDivider(width: 1),
+        Expanded(child: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
               ? Center(
@@ -63,7 +74,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
                   : Row(children: [
                       SizedBox(
                         width: 260,
-                        child: ListView.builder(
+                        child: RailLeftEdge(railFocus: _railFocus, child: ListView.builder(
                           itemCount: repo.seriesGroups.length,
                           itemBuilder: (_, i) {
                             final g = repo.seriesGroups[i];
@@ -75,7 +86,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
                               onSelect: () => setState(() => group = g),
                             );
                           },
-                        ),
+                        )),
                       ),
                       const VerticalDivider(width: 1),
                       Expanded(
@@ -93,6 +104,8 @@ class _SeriesScreenState extends State<SeriesScreen> {
                               ),
                       ),
                     ]),
+        ),
+      ]),
     );
   }
 }

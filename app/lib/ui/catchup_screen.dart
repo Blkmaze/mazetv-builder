@@ -2,18 +2,35 @@ import 'package:flutter/material.dart';
 import '../models/channel.dart';
 import '../services/channel_repo.dart';
 import 'player_screen.dart';
+import 'section_rail.dart';
 import 'tv_widgets.dart';
 
 /// Channels whose portal advertises catchup/timeshift (tv_archive=1).
-class CatchupScreen extends StatelessWidget {
+class CatchupScreen extends StatefulWidget {
   const CatchupScreen({super.key});
+
+  @override
+  State<CatchupScreen> createState() => _CatchupScreenState();
+}
+
+class _CatchupScreenState extends State<CatchupScreen> {
+  final _railFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _railFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final channels = ChannelRepo.I.archiveChannels;
     return Scaffold(
       appBar: AppBar(title: const Text('Catchup')),
-      body: channels.isEmpty
+      body: Row(children: [
+        SectionRail(current: AppSection.catchup, railFocus: _railFocus),
+        const VerticalDivider(width: 1),
+        Expanded(child: channels.isEmpty
           ? const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
@@ -24,7 +41,7 @@ class CatchupScreen extends StatelessWidget {
                 ),
               ),
             )
-          : ListView.builder(
+          : RailLeftEdge(railFocus: _railFocus, child: ListView.builder(
               itemCount: channels.length,
               itemBuilder: (_, i) {
                 final c = channels[i];
@@ -36,7 +53,9 @@ class CatchupScreen extends StatelessWidget {
                   onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CatchupPickerScreen(channel: c))),
                 );
               },
-            ),
+            )),
+        ),
+      ]),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/vod.dart';
 import '../services/channel_repo.dart';
+import 'section_rail.dart';
 import 'tv_widgets.dart';
 import 'movie_detail_screen.dart';
 
@@ -11,6 +12,7 @@ class MoviesScreen extends StatefulWidget {
 }
 
 class _MoviesScreenState extends State<MoviesScreen> {
+  final _railFocus = FocusNode();
   final repo = ChannelRepo.I;
   bool loading = true;
   String? error;
@@ -46,10 +48,19 @@ class _MoviesScreenState extends State<MoviesScreen> {
   }
 
   @override
+  void dispose() {
+    _railFocus.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Movies')),
-      body: loading
+      body: Row(children: [
+        SectionRail(current: AppSection.movies, railFocus: _railFocus),
+        const VerticalDivider(width: 1),
+        Expanded(child: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
               ? Center(
@@ -63,7 +74,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                   : Row(children: [
                       SizedBox(
                         width: 260,
-                        child: ListView.builder(
+                        child: RailLeftEdge(railFocus: _railFocus, child: ListView.builder(
                           itemCount: repo.vodGroups.length,
                           itemBuilder: (_, i) {
                             final g = repo.vodGroups[i];
@@ -75,7 +86,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                               onSelect: () => setState(() => group = g),
                             );
                           },
-                        ),
+                        )),
                       ),
                       const VerticalDivider(width: 1),
                       Expanded(
@@ -93,6 +104,8 @@ class _MoviesScreenState extends State<MoviesScreen> {
                               ),
                       ),
                     ]),
+        ),
+      ]),
     );
   }
 }

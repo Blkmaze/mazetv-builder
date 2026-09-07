@@ -164,6 +164,7 @@ class TvRailTile extends StatelessWidget {
   final VoidCallback onSelect;
   final bool autofocus;
   final bool selected;
+  final FocusNode? focusNode;
 
   const TvRailTile({
     super.key,
@@ -173,6 +174,7 @@ class TvRailTile extends StatelessWidget {
     required this.onSelect,
     this.autofocus = false,
     this.selected = false,
+    this.focusNode,
   });
 
   @override
@@ -190,6 +192,7 @@ class TvRailTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             child: InkWell(
               autofocus: autofocus,
+              focusNode: focusNode,
               onTap: onSelect,
               borderRadius: BorderRadius.circular(8),
               child: AnimatedContainer(
