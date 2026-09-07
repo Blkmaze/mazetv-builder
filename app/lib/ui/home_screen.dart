@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final r = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Search channels'),
+        title: const Text('Search channels & programs'),
         content: TextField(controller: c, autofocus: true, onSubmitted: (v) => Navigator.pop(context, v)),
         actions: [TextButton(onPressed: () => Navigator.pop(context, c.text), child: const Text('Search'))],
       ),

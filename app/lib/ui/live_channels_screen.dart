@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/channel.dart';
 import '../services/channel_repo.dart';
 import '../services/storage.dart';
@@ -28,7 +29,9 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
   String search = '';
   String? activeProfileId;
   Set<String> favorites = {};
-  Channel? previewChannel;
+  final previewChannel = ValueNotifier<Channel?>(null);
+  int _offsetMin = 0;          // how far the timeline is scrolled ahead of now
+  final _listFocus = FocusNode();
   Timer? _clock;
 
   // Timeline geometry (shared by the header and every row so they line up).
@@ -47,6 +50,8 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
   @override
   void dispose() {
     _clock?.cancel();
+    _listFocus.dispose();
+    previewChannel.dispose();
     super.dispose();
   }
 
@@ -55,10 +60,9 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
     favorites = await Storage.favorites(activeProfileId);
     group = repo.groups.isEmpty ? null : repo.groups.first;
     if (!mounted) return;
-    setState(() {
-      final inGroup = repo.inGroup(group ?? '');
-      previewChannel = inGroup.isNotEmpty ? inGroup.first : (repo.channels.isEmpty ? null : repo.channels.first);
-    });
+    final inGroup = repo.inGroup(group ?? '');
+    previewChannel.value = inGroup.isNotEmpty ? inGroup.first : (repo.channels.isEmpty ? null : repo.channels.first);
+    setState(() {});
     // Guide data may still be streaming in — repaint when it lands.
     if (!repo.epg.loaded) {
       repo.loadEpg().then((_) { if (mounted) setState(() {}); });
@@ -81,7 +85,7 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
     final r = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Search channels'),
+        title: const Text('Search channels & programs'),
         content: TextField(controller: c, autofocus: true, onSubmitted: (v) => Navigator.pop(context, v)),
         actions: [TextButton(onPressed: () => Navigator.pop(context, c.text), child: const Text('Search'))],
       ),
@@ -93,7 +97,32 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
   /// sits a little way in from the left edge rather than on it.
   DateTime get _windowStart {
     final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day, now.hour, now.minute < 30 ? 0 : 30);
+    return DateTime(now.year, now.month, now.day, now.hour, now.minute < 30 ? 0 : 30).add(Duration(minutes: _offsetMin));
+  }
+
+  /// ◀ ▶ while the channel list has focus scroll the timeline by half an
+  /// hour; ◀ at "now" falls through so focus can move to the categories.
+  KeyEventResult _listKeys(FocusNode _, KeyEvent e) {
+    if (e is! KeyDownEvent) return KeyEventResult.ignored;
+    if (e.logicalKey == LogicalKeyboardKey.arrowRight) {
+      if (_offsetMin < 12 * 60) setState(() => _offsetMin += 30);
+      return KeyEventResult.handled;
+    }
+    if (e.logicalKey == LogicalKeyboardKey.arrowLeft && _offsetMin > 0) {
+      setState(() => _offsetMin -= 30);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// Programme search too: a channel matches if its name, or anything on it
+  /// in the next 12 hours, contains the query.
+  bool _matches(Channel c, String q) {
+    if (c.name.toLowerCase().contains(q)) return true;
+    for (final p in repo.epg.byChannel[c.epgId] ?? const <Programme>[]) {
+      if (p.title.toLowerCase().contains(q)) return true;
+    }
+    return false;
   }
 
   @override
@@ -101,7 +130,8 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
     final groups = [kFavoritesGroup, ...repo.groups];
     List<Channel> channels;
     if (search.isNotEmpty) {
-      channels = repo.channels.where((c) => c.name.toLowerCase().contains(search.toLowerCase())).toList();
+      final q = search.toLowerCase();
+      channels = repo.channels.where((c) => _matches(c, q)).toList();
     } else if (group == kFavoritesGroup || group == null) {
       channels = repo.channels.where((c) => favorites.contains(c.id)).toList();
     } else {
@@ -119,7 +149,10 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
         ],
       ),
       body: Column(children: [
-        LivePreviewStrip(key: const ValueKey('live-preview'), channel: previewChannel),
+        ValueListenableBuilder<Channel?>(
+          valueListenable: previewChannel,
+          builder: (_, ch, __) => LivePreviewStrip(key: const ValueKey('live-preview'), channel: ch),
+        ),
         const Divider(height: 1),
         Expanded(
           child: Row(children: [
@@ -146,18 +179,26 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
             // ---- this category's guide
             Expanded(
               child: Column(children: [
-                _TimelineHeader(windowStart: windowStart, hours: _windowHours, nameColWidth: _nameColWidth),
+                _TimelineHeader(windowStart: windowStart, hours: _windowHours, nameColWidth: _nameColWidth, scrolled: _offsetMin > 0),
                 const Divider(height: 1),
                 Expanded(
                   child: channels.isEmpty
-                      ? Center(child: Text(group == kFavoritesGroup ? 'No favorites yet — hold OK on a channel to add one' : 'No channels'))
-                      : ListView.builder(
+                      ? Center(child: Text(search.isNotEmpty
+                          ? 'Nothing matches "$search"'
+                          : group == kFavoritesGroup ? 'No favorites yet — hold OK on a channel to add one' : 'No channels'))
+                      : Focus(
+                          focusNode: _listFocus,
+                          canRequestFocus: false,
+                          skipTraversal: true,
+                          onKeyEvent: _listKeys,
+                          child: ListView.builder(
                           itemCount: channels.length,
+                          itemExtent: 64,
                           itemBuilder: (_, i) {
                             final c = channels[i];
                             final isFav = favorites.contains(c.id);
                             return TvTile(
-                              onFocusChange: (has) { if (has) setState(() => previewChannel = c); },
+                              onFocusChange: (has) { if (has) previewChannel.value = c; },
                               leading: SizedBox(
                                 width: 74,
                                 child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -170,7 +211,8 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
                               title: Row(children: [
                                 SizedBox(
                                   width: _nameColWidth,
-                                  child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  child: Text(c.name, maxLines: 2, overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 14, height: 1.15)),
                                 ),
                                 Expanded(
                                   child: _TimelineCell(
@@ -189,6 +231,7 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
                             );
                           },
                         ),
+                        ),
                 ),
               ]),
             ),
@@ -205,7 +248,8 @@ class _TimelineHeader extends StatelessWidget {
   final DateTime windowStart;
   final int hours;
   final double nameColWidth;
-  const _TimelineHeader({required this.windowStart, required this.hours, required this.nameColWidth});
+  final bool scrolled;
+  const _TimelineHeader({required this.windowStart, required this.hours, required this.nameColWidth, this.scrolled = false});
 
   // ListTile: 16 padding + 74 leading + 16 gap before the title.
   static const _leadIn = 16.0 + 74 + 16;
@@ -225,7 +269,7 @@ class _TimelineHeader extends StatelessWidget {
             padding: const EdgeInsets.only(left: 16),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('${_weekday(now)}, ${fmt12(now)}',
+              child: Text(scrolled ? '◀ back to now' : '${_weekday(now)}, ${fmt12(now)}   ▶ later',
                   style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13, fontWeight: FontWeight.bold)),
             ),
           ),
@@ -237,11 +281,16 @@ class _TimelineHeader extends StatelessWidget {
               for (var i = 0; i < slots; i++)
                 Positioned(
                   left: i * slotW, top: 0, bottom: 0,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(fmt12(windowStart.add(Duration(minutes: 30 * i))),
-                        style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                  ),
+                  child: Builder(builder: (ctx) {
+                    final t = windowStart.add(Duration(minutes: 30 * i));
+                    final isNow = !now.isBefore(t) && now.isBefore(t.add(const Duration(minutes: 30)));
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(fmt12(t),
+                          style: TextStyle(color: isNow ? Colors.white : Colors.white54, fontSize: 13,
+                              fontWeight: isNow ? FontWeight.bold : FontWeight.normal)),
+                    );
+                  }),
                 ),
             ]);
           }),
@@ -272,7 +321,7 @@ class _TimelineCell extends StatelessWidget {
     final now = DateTime.now();
 
     return SizedBox(
-      height: 40,
+      height: 46,
       child: LayoutBuilder(builder: (_, box) {
         final pxPerMin = box.maxWidth / windowMin;
         final nowX = now.difference(windowStart).inMinutes * pxPerMin;
@@ -299,8 +348,9 @@ class _TimelineCell extends StatelessWidget {
         return Stack(children: [
           Positioned.fill(child: content),
           // the "now" line, drawn on every row so it reads as one continuous line
-          Positioned(left: nowX.clamp(0.0, box.maxWidth).toDouble(), top: 0, bottom: 0, width: 2,
-              child: Container(color: accent.withOpacity(0.9))),
+          if (nowX >= 0 && nowX <= box.maxWidth)
+            Positioned(left: nowX, top: 0, bottom: 0, width: 3,
+                child: Container(color: accent)),
         ]);
       }),
     );
@@ -313,13 +363,14 @@ class _TimelineCell extends StatelessWidget {
     final width = (e.difference(s).inMinutes * pxPerMin).clamp(0.0, maxW - left).toDouble();
     final onNow = p.isOnAt(now);
     return Positioned(
-      left: left, top: 4, bottom: 4, width: width,
+      left: left, top: 5, bottom: 5, width: width,
       child: Container(
         margin: const EdgeInsets.only(right: 3),
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          color: onNow ? accent.withOpacity(0.55) : Colors.white12,
-          borderRadius: BorderRadius.circular(5),
+          color: onNow ? accent.withOpacity(0.5) : Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: onNow ? accent : Colors.white12, width: 1),
         ),
         alignment: Alignment.centerLeft,
         child: Text(p.title, maxLines: 1, overflow: TextOverflow.ellipsis,
@@ -327,11 +378,4 @@ class _TimelineCell extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 12-hour clock like Ghost's ("9:30 PM").
-String fmt12(DateTime t) {
-  final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
-  final m = t.minute.toString().padLeft(2, '0');
-  return '$h:$m ${t.hour < 12 ? 'AM' : 'PM'}';
 }

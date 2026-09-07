@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/branding.dart';
+import '../config/theme_controller.dart';
 import '../services/channel_repo.dart';
 import '../services/recording_service.dart';
 import '../services/storage.dart';
@@ -199,6 +200,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(version.isEmpty ? ' ' : 'Version $version'
                 '${b.buildNumber > 0 ? ' · build ${b.buildNumber}' : ''}'),
           ),
+          const _SectionHeader('Colors & theme'),
+          TvTile(
+            leading: CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primary, radius: 12),
+            title: const Text('Colors & theme'),
+            subtitle: const Text('Pick a theme, or choose your own accent and background'),
+            onSelect: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const AppearanceScreen()));
+              if (mounted) setState(() {});
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Wrap(spacing: 10, runSpacing: 10, children: [
+              for (final t in ThemeController.presets)
+                Focus(child: Builder(builder: (ctx) {
+                  final focused = Focus.of(ctx).hasFocus;
+                  final on = ThemeController.primaryColor.value.value == t.accent.value;
+                  return InkWell(
+                    onTap: () async { await ThemeController.applyPreset(t); if (mounted) setState(() {}); },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: t.background,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: focused ? Colors.white : (on ? t.accent : Colors.white24), width: focused ? 2.5 : 1.5),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Container(width: 14, height: 14, decoration: BoxDecoration(color: t.accent, shape: BoxShape.circle)),
+                        const SizedBox(width: 8),
+                        Text(t.name, style: const TextStyle(fontSize: 13)),
+                      ]),
+                    ),
+                  );
+                })),
+            ]),
+          ),
           const _SectionHeader('Connection'),
           TvTile(
             leading: const Icon(Icons.dns),
@@ -272,13 +310,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               setState(() => resumeLastChannel = v);
               _setBool(_kResumeLastChannel, v);
             },
-          ),
-          const _SectionHeader('Appearance'),
-          TvTile(
-            leading: CircleAvatar(backgroundColor: b.primaryColor, radius: 12),
-            title: const Text('Accent color'),
-            subtitle: const Text('Change the app\'s color — no rebuild needed'),
-            onSelect: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AppearanceScreen())),
           ),
           const _SectionHeader('Security'),
           TvTile(
