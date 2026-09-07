@@ -93,6 +93,11 @@ perms = """
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
 """
 s = s.replace("<application", perms + "    <application", 1)
+# Keep the app on internal flash. Fire OS will otherwise offload it to a USB
+# drive, and an app running from USB dies the instant the drive stalls,
+# sleeps, or is reindexed -- which looks exactly like a random crash.
+if "installLocation" not in s:
+    s = s.replace("<manifest ", '<manifest android:installLocation="internalOnly" ', 1)
 s = re.sub(r'android:label="[^"]*"', f'android:label="{a.app_name}"', s, count=1)
 s = s.replace("<application", '<application\n        android:banner="@mipmap/ic_banner"\n        android:usesCleartextTraffic="true"', 1)
 s = s.replace('<category android:name="android.intent.category.LAUNCHER"/>',
