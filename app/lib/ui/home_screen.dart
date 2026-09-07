@@ -1,5 +1,6 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemNavigator;
 import '../config/branding.dart';
 import '../models/channel.dart';
 import '../models/profile.dart';
@@ -126,6 +127,43 @@ class _HomeScreenState extends State<HomeScreen> {
     await _loadMostWatched();
   }
 
+  /// Back on the Home screen: Ghost-style "Exit?" box instead of just quitting.
+  Future<void> _confirmExit() async {
+    final leave = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final primary = Theme.of(ctx).colorScheme.primary;
+        return AlertDialog(
+          backgroundColor: const Color(0xFF14171F),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: primary.withOpacity(0.5), width: 1.5),
+          ),
+          contentPadding: const EdgeInsets.fromLTRB(28, 26, 28, 10),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Image.asset('assets/logo.png', height: 44, width: 44, fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Icon(Icons.power_settings_new, size: 44, color: primary)),
+            const SizedBox(height: 14),
+            Text('Exit ${Branding.I.appName}?',
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Are you sure you want to close the app?',
+                textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 15)),
+          ]),
+          actionsAlignment: MainAxisAlignment.center,
+          actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          actions: [
+            _ExitButton(label: 'Cancel', autofocus: true, onPressed: () => Navigator.pop(ctx, false)),
+            const SizedBox(width: 12),
+            _ExitButton(label: 'Exit', filled: true, onPressed: () => Navigator.pop(ctx, true)),
+          ],
+        );
+      },
+    );
+    if (leave == true) SystemNavigator.pop();
+  }
+
   void _openSearch() async {
     final c = TextEditingController();
     final r = await showDialog<String>(
@@ -232,7 +270,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final popularMovies = repo.supportsVod ? repo.popularMovies : const <VodItem>[];
     final popularSeries = repo.supportsVod ? repo.popularSeries : const <SeriesItem>[];
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmExit();
+      },
+      child: Scaffold(
       body: Stack(children: [
         // ---- blurred backdrop of whichever poster is highlighted (Ghost-style)
         Positioned.fill(
@@ -298,27 +341,35 @@ class _HomeScreenState extends State<HomeScreen> {
             Expanded(
               child: ListView(padding: const EdgeInsets.symmetric(vertical: 16), children: [
                 if (mostWatched.isNotEmpty) ...[
-                  _RowHeader(
-                    title: 'Your Most Watched Channels',
-                    trailing: TextButton.icon(
-                      onPressed: _clearMostWatched,
-                      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.white54),
-                      label: const Text('Clear most watched', style: TextStyle(color: Colors.white54, fontSize: 13)),
-                    ),
-                  ),
+                  const _RowHeader(title: 'Your Most Watched Channels'),
                   SizedBox(
-                    height: 96,
+                    height: _MostWatchedTile.rowHeight,
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       scrollDirection: Axis.horizontal,
                       itemCount: mostWatched.length,
                       itemBuilder: (_, i) => Padding(
-                        padding: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.only(right: 14),
                         child: _MostWatchedTile(channel: mostWatched[i], onSelect: () => _playMostWatched(i)),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  // Ghost puts "Clear most watched" under the row, on the left.
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 6, 20, 6),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _clearMostWatched,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white70,
+                          overlayColor: Theme.of(context).colorScheme.primary,
+                        ),
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Clear most watched', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ),
                 ],
                 if (repo.supportsVod && popularMovies.isNotEmpty) ...[
                   _RowHeader(title: repo.popularIsTrending ? 'Popular Movies' : 'New Movies'),
@@ -412,6 +463,43 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ]),
       ]),
+      ),
+    );
+  }
+}
+
+/// Focusable button for the exit box — plain outline for Cancel, accent fill for Exit.
+class _ExitButton extends StatelessWidget {
+  final String label;
+  final bool filled;
+  final bool autofocus;
+  final VoidCallback onPressed;
+  const _ExitButton({required this.label, required this.onPressed, this.filled = false, this.autofocus = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Focus(
+      autofocus: autofocus,
+      child: Builder(builder: (ctx) {
+        final focused = Focus.of(ctx).hasFocus;
+        return InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(8),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: 130,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: filled ? (focused ? primary : primary.withOpacity(0.7)) : (focused ? Colors.white12 : Colors.transparent),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: focused ? Colors.white : Colors.white24, width: focused ? 2 : 1),
+            ),
+            child: Text(label, textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 17, fontWeight: focused ? FontWeight.bold : FontWeight.w500)),
+          ),
+        );
+      }),
     );
   }
 }
@@ -433,9 +521,15 @@ class _RowHeader extends StatelessWidget {
   }
 }
 
-/// One tile in the "Your Most Watched Channels" row — logo + name,
-/// focusable so it's reachable and playable straight from the remote.
+/// One tile in the "Your Most Watched Channels" row, styled like Ghost's:
+/// a slate card with the channel logo filling it, the channel name in small
+/// text underneath (outside the card), and an accent border + glow when the
+/// remote lands on it. Playable straight from the remote.
 class _MostWatchedTile extends StatelessWidget {
+  static const double cardWidth = 150;
+  static const double cardHeight = 112;
+  static const double rowHeight = cardHeight + 32; // card + name line + breathing room
+
   final Channel channel;
   final VoidCallback onSelect;
   const _MostWatchedTile({required this.channel, required this.onSelect});
@@ -444,28 +538,47 @@ class _MostWatchedTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     return Focus(
-      canRequestFocus: false,
-      skipTraversal: true,
       child: Builder(builder: (ctx) {
         final focused = Focus.of(ctx).hasFocus;
-        return InkWell(
-          onTap: onSelect,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            width: 140,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: focused ? primary.withOpacity(0.25) : Colors.white10,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: focused ? primary : Colors.transparent, width: 2),
+        return SizedBox(
+          width: cardWidth,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            InkWell(
+              onTap: onSelect,
+              borderRadius: BorderRadius.circular(10),
+              child: AnimatedScale(
+                scale: focused ? 1.05 : 1.0,
+                duration: const Duration(milliseconds: 140),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  width: cardWidth,
+                  height: cardHeight,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF232838),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: focused ? primary : Colors.transparent, width: 2),
+                    boxShadow: focused
+                        ? [BoxShadow(color: primary.withOpacity(0.55), blurRadius: 18, spreadRadius: 1)]
+                        : const [],
+                  ),
+                  child: Center(
+                    child: channel.logo.isEmpty
+                        ? const Icon(Icons.tv, size: 44, color: Colors.white70)
+                        : Image.network(channel.logo, fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.tv, size: 44, color: Colors.white70)),
+                  ),
+                ),
+              ),
             ),
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              ChannelLogo(channel.logo, size: 40),
-              const SizedBox(height: 6),
-              Text(channel.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
-            ]),
-          ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(channel.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                      color: focused ? Colors.white : Colors.white70)),
+            ),
+          ]),
         );
       }),
     );

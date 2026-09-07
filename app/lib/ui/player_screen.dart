@@ -37,6 +37,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Timer? hideTimer;
   Timer? _stallTimer;
   String? error;
+  // Non-fatal decode glitches (bad packets after a reconnect, a stray
+  // corrupt audio frame). Shown briefly as a chip, never as a red error.
+  String? _notice;
+  Timer? _noticeTimer;
+  int _decodeErrors = 0;
+  bool _autoReopened = false;
   final _digits = Queue<String>();
   Timer? _digitTimer;
   String _digitPreview = '';
@@ -47,13 +53,49 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     tuneForLiveTs(player);
-    player.stream.error.listen((e) { if (mounted) setState(() => error = e); });
+    player.stream.error.listen(_onPlayerError);
     player.stream.buffering.listen((b) {
       if (!b) _stallTimer?.cancel();
-      if (mounted) setState(() => buffering = b);
+      if (!mounted) return;
+      setState(() {
+        buffering = b;
+        // Picture is flowing again after an error (mpv reconnected) — drop
+        // the red overlay instead of leaving it painted over live video.
+        if (!b && player.state.playing) error = null;
+      });
     });
     _applyDecodePreference();
     _open();
+  }
+
+  /// mpv reports every failed packet on its error stream, including ones it
+  /// recovers from on its own. "Error decoding audio/video" is almost always
+  /// a handful of corrupt TS packets (a provider hiccup or a mid-stream
+  /// reconnect) and playback carries on — so it must not be shown as a
+  /// fatal "Stream error". Only a persistent flood gets one automatic
+  /// reopen; everything else stays a quiet chip.
+  void _onPlayerError(String e) {
+    if (!mounted) return;
+    final lower = e.toLowerCase();
+    if (!isTransientPlayerError(e)) {
+      setState(() => error = e);
+      return;
+    }
+    _decodeErrors++;
+    if (_decodeErrors >= 40 && !_autoReopened) {
+      _autoReopened = true;
+      _decodeErrors = 0;
+      setState(() => _notice = 'Stream is throwing bad packets — reconnecting…');
+      _open(auto: true);
+      return;
+    }
+    setState(() => _notice = lower.contains('audio')
+        ? 'Audio glitch — recovering…'
+        : 'Bad packets in the stream — recovering…');
+    _noticeTimer?.cancel();
+    _noticeTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _notice = null);
+    });
   }
 
   /// Best-effort: ask libmpv to use software decoding if the user flipped
@@ -73,7 +115,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  Future<void> _open() async {
+  Future<void> _open({bool auto = false}) async {
+    _decodeErrors = 0;
+    if (!auto) _autoReopened = false;
     setState(() { error = null; overlay = true; buffering = true; });
     Storage.saveLastChannel(ch.id);
     Storage.recordWatch(ch.id);
@@ -124,6 +168,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     hideTimer?.cancel();
     _digitTimer?.cancel();
     _stallTimer?.cancel();
+    _noticeTimer?.cancel();
     player.dispose();
     super.dispose();
   }
@@ -157,6 +202,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 padding: const EdgeInsets.all(32),
                 child: Text('Stream error: ${scrubSecrets(error!)}',
                     textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontSize: 20)),
+              ),
+            ),
+          if (_notice != null)
+            Positioned(
+              top: 24, left: 0, right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(20)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(width: 10),
+                    Text(_notice!, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                  ]),
+                ),
               ),
             ),
           if (_digitPreview.isNotEmpty)

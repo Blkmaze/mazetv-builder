@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/live_stream_tuning.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -46,7 +47,9 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    _subs.add(player.stream.error.listen((e) { if (mounted) setState(() => error = e); }));
+    _subs.add(player.stream.error.listen((e) {
+      if (mounted && !isTransientPlayerError(e)) setState(() => error = e);
+    }));
     _subs.add(player.stream.position.listen((p) { if (mounted) setState(() => position = p); }));
     _subs.add(player.stream.duration.listen((d) {
       if (!mounted) return;

@@ -43,6 +43,9 @@ Future<void> tuneForLiveTs(Player player, {bool preview = false}) async {
     if (smooth) 'interpolation': 'no',
     // Some boxes keep better A/V sync on the OpenSL ES path.
     if (altAudio) 'ao': 'opensles',
+    // If the audio output can't be opened, keep the video going silently
+    // rather than failing the whole stream.
+    'audio-fallback-to-null': 'yes',
     // Non-seekable TS otherwise trips "stream error; force-seekable".
     'force-seekable': 'yes',
     // Recover a dropped HTTP connection transparently, mid-stream.
@@ -72,4 +75,16 @@ Future<void> tuneForLiveTs(Player player, {bool preview = false}) async {
       // best-effort
     }
   }
+}
+
+/// True for mpv error lines that describe a recoverable glitch (a corrupt
+/// packet, a decode hiccup) rather than a dead stream. These must not be
+/// surfaced as fatal errors — mpv keeps playing right through them.
+bool isTransientPlayerError(String e) {
+  final lower = e.toLowerCase();
+  return lower.contains('decoding audio') ||
+      lower.contains('decoding video') ||
+      lower.contains('invalid data') ||
+      lower.contains('audio device underrun') ||
+      lower.contains('could not update timestamps');
 }
