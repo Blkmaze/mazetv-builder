@@ -12,6 +12,7 @@ class Branding {
   final String supportText;
   final List<Portal> portals;  // pre-configured servers; if non-empty, login hides the raw host field
   final String pairBaseUrl;    // base URL of the Netlify pairing functions, for code/QR sign-in
+  final String tmdbApiKey;     // optional: enables real "Popular" rows via TMDB trending
   final String repo;           // "owner/name" this build was published from, for OTA checks
   final int buildNumber;       // this build's GitHub Actions run number
   final bool hasCustomLogo;    // true if icon_url was set (assets/logo.png is your art, not a placeholder)
@@ -49,6 +50,7 @@ class Branding {
           .where((p) => p.name.isNotEmpty && p.host.isNotEmpty)
           .toList(),
       pairBaseUrl: j['pair_base_url'] ?? '',
+      tmdbApiKey: j['tmdb_api_key'] ?? '',
       repo: j['repo'] ?? '',
       buildNumber: (j['build_number'] as num?)?.toInt() ?? 0,
       hasCustomLogo: j['has_custom_logo'] == true,

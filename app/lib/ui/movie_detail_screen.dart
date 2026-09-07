@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/vod.dart';
 import '../services/channel_repo.dart';
+import '../services/storage.dart';
 import 'tv_widgets.dart';
 import 'vod_player_screen.dart';
 
@@ -19,6 +20,7 @@ class MovieDetailScreen extends StatefulWidget {
 class _MovieDetailScreenState extends State<MovieDetailScreen> {
   VodInfo? info;
   bool loading = true;
+  int resumeAt = 0;
 
   @override
   void initState() {
@@ -27,6 +29,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   }
 
   Future<void> _load() async {
+    resumeAt = await Storage.resumePosition(widget.item.id) ?? 0;
     try {
       final x = ChannelRepo.I.xtream;
       if (x != null) info = await x.vodInfo(widget.item.id);
@@ -36,8 +39,17 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     if (mounted) setState(() => loading = false);
   }
 
-  void _play() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => VodPlayerScreen(item: widget.item)));
+  Future<void> _play({int from = 0}) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => VodPlayerScreen(item: widget.item, startAtSeconds: from)));
+    // Back from the player: refresh the Resume offer.
+    resumeAt = await Storage.resumePosition(widget.item.id) ?? 0;
+    if (mounted) setState(() {});
+  }
+
+  static String _clock(int secs) {
+    final h = secs ~/ 3600, m = (secs % 3600) ~/ 60, s = secs % 60;
+    final ms = '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    return h > 0 ? '$h:$ms' : ms;
   }
 
   Future<void> _trailer() async {
@@ -72,7 +84,8 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
             child: ImageFiltered(
               imageFilter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
               child: Opacity(opacity: 0.5,
-                  child: Image.network(backdrop, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox())),
+                  child: Image.network(backdrop, fit: BoxFit.cover, width: double.infinity, height: double.infinity,
+                      errorBuilder: (_, __, ___) => const SizedBox())),
             ),
           ),
         Positioned.fill(
@@ -119,9 +132,19 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                       ),
                   ]),
                   const SizedBox(height: 22),
-                  Row(children: [
-                    TvButton(label: 'Play', icon: Icons.play_arrow, autofocus: true, onPressed: _play),
-                    const SizedBox(width: 14),
+                  Wrap(spacing: 14, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    if (resumeAt > 0) ...[
+                      TvButton(label: 'Resume from ${_clock(resumeAt)}', icon: Icons.play_arrow, autofocus: true,
+                          onPressed: () => _play(from: resumeAt)),
+                      OutlinedButton.icon(
+                        onPressed: () => _play(),
+                        icon: const Icon(Icons.replay),
+                        label: const Padding(padding: EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+                            child: Text('Play from start', style: TextStyle(fontSize: 18))),
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: BorderSide(color: accent)),
+                      ),
+                    ] else
+                      TvButton(label: 'Play', icon: Icons.play_arrow, autofocus: true, onPressed: () => _play()),
                     if (info?.trailer.isNotEmpty ?? false)
                       OutlinedButton.icon(
                         onPressed: _trailer,

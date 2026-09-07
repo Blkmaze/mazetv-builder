@@ -28,6 +28,7 @@ ap.add_argument("--support-text", default="")
 ap.add_argument("--icon", default="")
 ap.add_argument("--portals", default="[]", help='JSON list like [{"name":"Prada","host":"http://pradahype.com:33726"}]')
 ap.add_argument("--pair-base-url", default="")
+ap.add_argument("--tmdb-api-key", default="", help="optional TMDB v3 API key for real Popular rows")
 ap.add_argument("--repo", default="", help="owner/name this build is published from (for in-app OTA update checks)")
 ap.add_argument("--build-number", default="0", help="GitHub Actions run number for this build")
 a = ap.parse_args()
@@ -51,7 +52,7 @@ with open(f"{P}/assets/branding.json", "w") as f:
     json.dump({
         "app_name": a.app_name, "primary_color": color, "portal_url": a.portal_url,
         "epg_url": a.epg_url, "vpn_config_url": a.vpn_url, "support_text": a.support_text,
-        "portals": portals, "pair_base_url": a.pair_base_url,
+        "portals": portals, "pair_base_url": a.pair_base_url, "tmdb_api_key": a.tmdb_api_key,
         "repo": a.repo, "build_number": int(a.build_number or 0),
         "has_custom_logo": True,
     }, f, indent=2)

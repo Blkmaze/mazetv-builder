@@ -193,7 +193,7 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
                           onKeyEvent: _listKeys,
                           child: ListView.builder(
                           itemCount: channels.length,
-                          itemExtent: 64,
+                          itemExtent: 80,
                           itemBuilder: (_, i) {
                             final c = channels[i];
                             final isFav = favorites.contains(c.id);

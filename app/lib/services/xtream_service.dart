@@ -208,12 +208,14 @@ class XtreamService {
   /// Year from "year", "release_date"/"releaseDate" (yyyy-…), or a trailing
   /// "(2024)" in the title — providers are inconsistent about where it lives.
   static int _year(Map s) {
-    for (final k in ['year', 'release_date', 'releaseDate']) {
+    for (final k in ['year', 'release_date', 'releaseDate', 'releasedate', 'released']) {
       final m = RegExp(r'(19|20)\d{2}').firstMatch((s[k] ?? '').toString());
       if (m != null) return int.parse(m.group(0)!);
     }
-    final m = RegExp(r'\((19|20)\d{2}\)').firstMatch((s['name'] ?? '').toString());
-    if (m != null) return int.parse(m.group(0)!.replaceAll(RegExp(r'[()]'), ''));
+    // "(2024)", "[2024]", or a bare "2024" anywhere in the title
+    final name = (s['name'] ?? s['title'] ?? '').toString();
+    final m = RegExp(r'\b(19|20)\d{2}\b').allMatches(name).toList();
+    if (m.isNotEmpty) return int.parse(m.last.group(0)!);
     return 0;
   }
 }

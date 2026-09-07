@@ -163,6 +163,10 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         if (mounted) setState(() {});
       }
+      // Real "popular": TMDB's weekly trending, filtered to what this
+      // provider has. Silently skipped when no key was baked into the build.
+      try { await repo.loadTrending(Branding.I.tmdbApiKey); } catch (_) {}
+      if (mounted) setState(() {});
     } finally {
       _catalogsLoading = false;
       if (mounted) setState(() {});
@@ -236,13 +240,17 @@ class _HomeScreenState extends State<HomeScreen> {
             duration: const Duration(milliseconds: 400),
             child: _backdrop.isEmpty
                 ? const SizedBox.shrink()
-                : ImageFiltered(
+                : SizedBox.expand(
                     key: ValueKey(_backdrop),
-                    imageFilter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Opacity(
-                      opacity: 0.55,
-                      child: Image.network(_backdrop, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                    child: ImageFiltered(
+                      imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                      child: Opacity(
+                        opacity: 0.6,
+                        // explicit size: inside the fade animation the image would
+                        // otherwise shrink to its own dimensions and show as a "card"
+                        child: Image.network(_backdrop, fit: BoxFit.cover, width: double.infinity, height: double.infinity,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                      ),
                     ),
                   ),
           ),
@@ -313,7 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 8),
                 ],
                 if (repo.supportsVod && popularMovies.isNotEmpty) ...[
-                  const _RowHeader(title: 'Popular Movies'),
+                  _RowHeader(title: repo.popularIsTrending ? 'Popular Movies' : 'New Movies'),
                   SizedBox(
                     height: 190,
                     child: ListView.builder(
@@ -341,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 8),
                 ],
                 if (repo.supportsVod && popularSeries.isNotEmpty) ...[
-                  const _RowHeader(title: 'Popular Series'),
+                  _RowHeader(title: repo.popularIsTrending ? 'Popular Series' : 'New Series'),
                   SizedBox(
                     height: 190,
                     child: ListView.builder(

@@ -115,6 +115,9 @@
         <input type="text" id="support_text" value="Contact your provider for login details.">
       </label>
 
+      <label>TMDB API key <small>optional — makes "Popular" rows use TMDB's weekly trending</small>
+        <input type="text" id="tmdb_api_key" placeholder="free key from themoviedb.org → Settings → API">
+      </label>
       <label>Pairing site URL <small>your Netlify site's own URL — enables "Sign in with a code"</small>
         <input type="text" id="pair_base_url" placeholder="https://mazetv.netlify.app">
       </label>
@@ -174,7 +177,7 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const fields = ["app_name","package_id","primary_color","icon_url","support_text","portal_url","epg_url","vpn_url","portals","pair_base_url"];
+const fields = ["app_name","package_id","primary_color","icon_url","support_text","portal_url","epg_url","vpn_url","portals","pair_base_url","tmdb_api_key"];
 
 // ---- live preview
 function initials(n) { return (n.trim().split(/\s+/).slice(0,2).map(w => w[0] || "").join("") || "TV").toUpperCase(); }

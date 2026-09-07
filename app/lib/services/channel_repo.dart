@@ -4,6 +4,7 @@ import '../models/server_config.dart';
 import '../models/vod.dart';
 import 'epg_service.dart';
 import 'm3u_service.dart';
+import 'tmdb_service.dart';
 import 'xtream_service.dart';
 
 /// One place that knows how to turn an Account into channels + EPG, and how
@@ -177,31 +178,94 @@ class ChannelRepo {
   /// sends no years at all, so the row never comes back empty.
   static List<T> _popular<T>(List<T> items, {
     required int Function(T) year, required int Function(T) added, required double Function(T) rating,
+    required String Function(T) id,
     int take = 20,
   }) {
-    final cutoffYear = DateTime.now().year - 1;
-    final cutoffAdded = DateTime.now().subtract(const Duration(days: 120)).millisecondsSinceEpoch ~/ 1000;
-    final recent = items.where((i) => year(i) >= cutoffYear || added(i) >= cutoffAdded).toList();
-    final pool = recent.length >= 8 ? recent : items;
-    // Newest release first, then most recently added, then rating — that's
-    // what surfaces this year's titles the way Ghost's row does, instead of
-    // well-rated classics from decades ago.
+    if (items.isEmpty) return const [];
+    int numId(T i) => int.tryParse(id(i)) ?? 0;
+    final anyYear = items.any((i) => year(i) > 0);
+    final anyAdded = items.any((i) => added(i) > 0);
+
+    // Newest first. Year if the provider gives one; else when it was added;
+    // else the stream id — Xtream ids count up as titles are added, so the
+    // highest ids are the newest arrivals. Rating only breaks ties, so it
+    // can't drag decades-old classics to the top the way it did.
     int cmp(T a, T b) {
-      final y = year(b).compareTo(year(a));
-      if (y != 0) return y;
-      final ad = added(b).compareTo(added(a));
-      if (ad != 0) return ad;
+      if (anyYear) { final y = year(b).compareTo(year(a)); if (y != 0) return y; }
+      if (anyAdded) { final ad = added(b).compareTo(added(a)); if (ad != 0) return ad; }
+      final n = numId(b).compareTo(numId(a));
+      if (n != 0) return n;
       return rating(b).compareTo(rating(a));
     }
+
+    // Prefer genuinely recent titles when we can tell what "recent" is.
+    final cutoffYear = DateTime.now().year - 1;
+    final cutoffAdded = DateTime.now().subtract(const Duration(days: 120)).millisecondsSinceEpoch ~/ 1000;
+    final recent = items.where((i) => (anyYear && year(i) >= cutoffYear) || (anyAdded && added(i) >= cutoffAdded)).toList();
+    final pool = recent.length >= 8 ? recent : items;
     final sorted = [...pool]..sort(cmp);
     return sorted.take(take).toList();
   }
 
-  List<VodItem> get popularMovies =>
-      _popular(vodItems, year: (v) => v.year, added: (v) => v.added, rating: (v) => v.rating);
+  /// TMDB-trending matches when we have a good handful; otherwise newest-first.
+  List<VodItem> get popularMovies => _trendingMovies.length >= 5
+      ? _trendingMovies.take(20).toList()
+      : _popular(vodItems, year: (v) => v.year, added: (v) => v.added, rating: (v) => v.rating, id: (v) => v.id);
 
-  List<SeriesItem> get popularSeries =>
-      _popular(seriesItems, year: (s) => s.year, added: (s) => s.added, rating: (s) => s.rating);
+  List<SeriesItem> get popularSeries => _trendingSeries.length >= 5
+      ? _trendingSeries.take(20).toList()
+      : _popular(seriesItems, year: (s) => s.year, added: (s) => s.added, rating: (s) => s.rating, id: (s) => s.id);
+
+  /// True when the Popular rows are coming from TMDB trending.
+  bool get popularIsTrending => _trendingMovies.length >= 5 || _trendingSeries.length >= 5;
+
+  // ---- "Popular" via TMDB trending, matched against the provider's catalog --
+
+  List<VodItem> _trendingMovies = [];
+  List<SeriesItem> _trendingSeries = [];
+
+  /// Fetch TMDB's weekly trending lists and keep the titles this provider
+  /// actually has, in TMDB's popularity order. No key → nothing happens and
+  /// the newest-first ranking stays in charge.
+  Future<void> loadTrending(String apiKey) async {
+    if (apiKey.isEmpty || !supportsVod) return;
+    final movies = await TmdbService.trendingMovies(apiKey);
+    final tv = await TmdbService.trendingTv(apiKey);
+    _trendingMovies = _matchTrending(movies, vodItems, (v) => v.name, (v) => v.year);
+    _trendingSeries = _matchTrending(tv, seriesItems, (s) => s.name, (s) => s.year);
+  }
+
+  static List<T> _matchTrending<T>(List<TrendingTitle> trending, List<T> catalog,
+      String Function(T) name, int Function(T) year) {
+    if (trending.isEmpty || catalog.isEmpty) return const [];
+    // index the catalog by normalized title once
+    final byKey = <String, List<T>>{};
+    for (final item in catalog) {
+      final k = TrendingTitle.norm(name(item));
+      if (k.length < 3) continue;
+      byKey.putIfAbsent(k, () => []).add(item);
+    }
+    final out = <T>[];
+    final seen = <T>{};
+    for (final t in trending) {
+      var hits = byKey[t.key] ?? const [];
+      if (hits.isEmpty && t.key.length >= 6) {
+        // tolerate provider prefixes/suffixes: "EN | Spider-Man Brand New Day 4K"
+        hits = [for (final e in byKey.entries) if (e.key.contains(t.key)) ...e.value];
+      }
+      // prefer a year match when the provider gives years
+      hits = [...hits]..sort((a, b) {
+        final da = (year(a) == 0 || t.year == 0) ? 0 : (year(a) - t.year).abs();
+        final db = (year(b) == 0 || t.year == 0) ? 0 : (year(b) - t.year).abs();
+        return da.compareTo(db);
+      });
+      for (final h in hits) {
+        if (year(h) != 0 && t.year != 0 && (year(h) - t.year).abs() > 1) continue;
+        if (seen.add(h)) { out.add(h); break; }
+      }
+    }
+    return out;
+  }
 
   /// Live channels with catchup/timeshift available.
   List<Channel> get archiveChannels => channels.where((c) => c.tvArchive).toList();

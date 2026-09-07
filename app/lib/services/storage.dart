@@ -203,6 +203,12 @@ class Storage {
   static Future<int> bufferLevel() async => (await SharedPreferences.getInstance()).getInt(_kBufferLevel) ?? 1;
   static Future<void> setBufferLevel(int v) async => (await SharedPreferences.getInstance()).setInt(_kBufferLevel, v);
 
+  // ---- VOD resume positions (seconds), keyed by movie/episode id ------------
+  static Future<int?> resumePosition(String id) async => (await SharedPreferences.getInstance()).getInt('resume_$id');
+  static Future<void> setResumePosition(String id, int seconds) async =>
+      (await SharedPreferences.getInstance()).setInt('resume_$id', seconds);
+  static Future<void> clearResumePosition(String id) async => (await SharedPreferences.getInstance()).remove('resume_$id');
+
   // ---- Settings PIN lock --------------------------------------------------
   static const _kPin = 'settings_pin';
 

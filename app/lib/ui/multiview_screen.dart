@@ -82,7 +82,7 @@ class _MultiviewScreenState extends State<MultiviewScreen> {
 
     return PopScope(
       canPop: expanded == null,
-      onPopInvoked: (didPop) { if (!didPop) _collapse(); },
+      onPopInvokedWithResult: (didPop, _) { if (!didPop) _collapse(); },
       child: Scaffold(
         appBar: expanded != null ? null : AppBar(
           title: const Text('Multiview'),
