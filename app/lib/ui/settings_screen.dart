@@ -34,6 +34,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool resumeLastChannel = false;
   bool hdOnly = false;
   int bufferLevel = 1;
+  bool smoothMotion = false;
+  bool altAudio = false;
   String? pin;
   int recordingCount = 0;
   int recordingBytes = 0;
@@ -53,12 +55,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final savedPin = await Storage.settingsPin();
     final savedHd = await Storage.hdOnly();
     final savedBuf = await Storage.bufferLevel();
+    final savedSmooth = await Storage.smoothMotion();
+    final savedAlt = await Storage.altAudio();
     if (!mounted) return;
     setState(() {
       softwareDecode = p.getBool(kForceSoftwareDecodeKey) ?? false;
       resumeLastChannel = p.getBool(_kResumeLastChannel) ?? false;
       hdOnly = savedHd;
       bufferLevel = savedBuf;
+      smoothMotion = savedSmooth;
+      altAudio = savedAlt;
       pin = savedPin;
     });
   }
@@ -262,6 +268,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               setState(() => softwareDecode = v);
               _setBool(kForceSoftwareDecodeKey, v);
             },
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.motion_photos_on),
+            title: const Text('Smooth motion'),
+            subtitle: const Text('Fixes stutter on 25/50fps channels by matching the TV\'s refresh rate'),
+            value: smoothMotion,
+            onChanged: (v) { setState(() => smoothMotion = v); Storage.setSmoothMotion(v); },
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.speaker),
+            title: const Text('Alternate audio output'),
+            subtitle: const Text('Try if voices drift out of sync with the picture'),
+            value: altAudio,
+            onChanged: (v) { setState(() => altAudio = v); Storage.setAltAudio(v); },
           ),
           TvTile(
             leading: const Icon(Icons.storage),

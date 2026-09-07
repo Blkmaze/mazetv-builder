@@ -56,22 +56,29 @@ class _TvTileState extends State<TvTile> {
     if (widget.onLongSelect == null || !_activateKeys.contains(event.logicalKey)) {
       return KeyEventResult.ignored;
     }
+    // We own OK entirely for tiles that have a long-press action: the
+    // button's built-in activation fires on key-DOWN, which would always beat
+    // the hold timer (and navigate away before it can fire). So: start the
+    // timer on down, decide on up. Released early → select; held → long.
     if (event is KeyDownEvent) {
       _longFired = false;
       _holdTimer?.cancel();
       _holdTimer = Timer(const Duration(milliseconds: 550), () {
-        if (!mounted || !_hasFocus) return; // focus moved on — this was a short press
+        if (!mounted || !_hasFocus) return;
         _longFired = true;
         widget.onLongSelect!();
       });
-      return KeyEventResult.ignored; // let the normal short-press path stay live too
+      return KeyEventResult.handled;
     }
+    if (event is KeyRepeatEvent) return KeyEventResult.handled; // holding: keep waiting
     if (event is KeyUpEvent) {
       _holdTimer?.cancel();
       if (_longFired) {
-        _longFired = false;
-        return KeyEventResult.handled; // swallow — don't also fire onSelect for this hold
+        _longFired = false;          // long-press already acted
+      } else {
+        widget.onSelect();           // a normal, short press
       }
+      return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }

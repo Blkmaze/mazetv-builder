@@ -32,7 +32,17 @@ Future<void> tuneForLiveTs(Player player, {bool preview = false}) async {
   final fwd  = preview ? '8MiB' : ['24MiB', '48MiB', '96MiB'][level.clamp(0, 2)];
   final back = preview ? '2MiB' : ['4MiB', '8MiB', '16MiB'][level.clamp(0, 2)];
 
+  final smooth = await Storage.smoothMotion();
+  final altAudio = await Storage.altAudio();
+
   final props = <String, String>{
+    // Judder fix for 25/50fps channels on a 60Hz TV: keep video on the
+    // display clock and gently resample audio to match, instead of
+    // dropping/duplicating frames. Off by default; toggle in Settings.
+    if (smooth) 'video-sync': 'display-resample',
+    if (smooth) 'interpolation': 'no',
+    // Some boxes keep better A/V sync on the OpenSL ES path.
+    if (altAudio) 'ao': 'opensles',
     // Non-seekable TS otherwise trips "stream error; force-seekable".
     'force-seekable': 'yes',
     // Recover a dropped HTTP connection transparently, mid-stream.

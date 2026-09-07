@@ -99,7 +99,8 @@ class XtreamService {
         group: catName[s['category_id']?.toString()] ?? 'Other',
         cover: (s['stream_icon'] ?? s['cover'] ?? '').toString(),
         streamUrl: '$_base/movie/${acct.username}/${acct.password}/$id.$ext',
-        plot: (s['plot'] ?? '').toString(),
+        // plot deliberately omitted here: thousands of descriptions in memory
+        // is what pushes small TV boxes over the limit. The detail page loads it.
         rating: _rating(s),
         added: _int(s['added']),
         year: _year(s),
@@ -121,7 +122,6 @@ class XtreamService {
         name: (s['name'] ?? '').toString(),
         group: catName[s['category_id']?.toString()] ?? 'Other',
         cover: (s['cover'] ?? '').toString(),
-        plot: (s['plot'] ?? '').toString(),
         rating: _rating(s),
         added: _int(s['last_modified'] ?? s['added']),
         year: _year(s),

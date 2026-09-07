@@ -34,12 +34,16 @@ class OtaInstaller {
       }
       final total = resp.contentLength ?? update.sizeBytes;
       var received = 0;
+      var lastPct = -1;
       final sink = file.openWrite();
       try {
         await for (final chunk in resp.stream) {
           sink.add(chunk);
           received += chunk.length;
-          if (total > 0) onProgress((received / total).clamp(0.0, 1.0));
+          if (total > 0) {
+            final pct = (received * 100 ~/ total);
+            if (pct != lastPct) { lastPct = pct; onProgress((received / total).clamp(0.0, 1.0)); }
+          }
         }
       } finally {
         await sink.close();

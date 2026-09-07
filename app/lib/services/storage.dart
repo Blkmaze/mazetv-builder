@@ -209,6 +209,15 @@ class Storage {
       (await SharedPreferences.getInstance()).setInt('resume_$id', seconds);
   static Future<void> clearResumePosition(String id) async => (await SharedPreferences.getInstance()).remove('resume_$id');
 
+  // ---- playback tuning toggles --------------------------------------------
+  static const _kSmoothMotion = 'smooth_motion';
+  static Future<bool> smoothMotion() async => (await SharedPreferences.getInstance()).getBool(_kSmoothMotion) ?? false;
+  static Future<void> setSmoothMotion(bool v) async => (await SharedPreferences.getInstance()).setBool(_kSmoothMotion, v);
+
+  static const _kAltAudio = 'alt_audio_output';
+  static Future<bool> altAudio() async => (await SharedPreferences.getInstance()).getBool(_kAltAudio) ?? false;
+  static Future<void> setAltAudio(bool v) async => (await SharedPreferences.getInstance()).setBool(_kAltAudio, v);
+
   // ---- Settings PIN lock --------------------------------------------------
   static const _kPin = 'settings_pin';
 
