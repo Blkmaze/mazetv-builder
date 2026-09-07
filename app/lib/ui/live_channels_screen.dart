@@ -100,6 +100,39 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
     return DateTime(now.year, now.month, now.day, now.hour, now.minute < 30 ? 0 : 30).add(Duration(minutes: _offsetMin));
   }
 
+  /// ▶ from the categories pane goes straight into this category's channel
+  /// list (the highlighted channel if there is one, else the first row).
+  /// Without this, Flutter's geometry-based traversal often picks the search
+  /// icon in the app bar instead, because it's the nearest focusable thing
+  /// "to the right" when the category is far down the list.
+  KeyEventResult _categoryKeys(FocusNode _, KeyEvent e) {
+    if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.arrowRight) return KeyEventResult.ignored;
+    final rows = _listFocus.traversalDescendants.toList();
+    if (rows.isEmpty) return KeyEventResult.handled; // nothing to go to yet — stay put
+    FocusNode? target;
+    final want = previewChannel.value;
+    if (want != null) {
+      // Prefer the row whose tile is currently previewed, if it's built.
+      for (final n in rows) {
+        final ctx = n.context;
+        if (ctx != null && _rowChannelOf(ctx)?.id == want.id) { target = n; break; }
+      }
+    }
+    (target ?? rows.first).requestFocus();
+    return KeyEventResult.handled;
+  }
+
+  /// Walks up from a focus node's context to the TvTile carrying the channel.
+  Channel? _rowChannelOf(BuildContext ctx) {
+    Channel? found;
+    ctx.visitAncestorElements((el) {
+      final w = el.widget;
+      if (w is _ChannelRowMarker) { found = w.channel; return false; }
+      return true;
+    });
+    return found;
+  }
+
   /// ◀ ▶ while the channel list has focus scroll the timeline by half an
   /// hour; ◀ at "now" falls through so focus can move to the categories.
   KeyEventResult _listKeys(FocusNode _, KeyEvent e) {
@@ -159,7 +192,11 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
             // ---- categories
             SizedBox(
               width: 260,
-              child: ListView.builder(
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: _categoryKeys,
+                child: ListView.builder(
                 itemCount: groups.length,
                 itemBuilder: (_, i) {
                   final isFav = groups[i] == kFavoritesGroup;
@@ -173,6 +210,7 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
                     onSelect: () => setState(() { group = groups[i]; search = ''; }),
                   );
                 },
+                ),
               ),
             ),
             const VerticalDivider(width: 1),
@@ -197,7 +235,9 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
                           itemBuilder: (_, i) {
                             final c = channels[i];
                             final isFav = favorites.contains(c.id);
-                            return TvTile(
+                            return _ChannelRowMarker(
+                              channel: c,
+                              child: TvTile(
                               onFocusChange: (has) { if (has) previewChannel.value = c; },
                               leading: SizedBox(
                                 width: 74,
@@ -228,6 +268,7 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
                               ),
                               onSelect: () => _play(channels, i),
                               onLongSelect: () => _toggleFavorite(c),
+                            ),
                             );
                           },
                         ),
@@ -378,4 +419,13 @@ class _TimelineCell extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Zero-cost wrapper so key handlers can find which channel a focused row is.
+class _ChannelRowMarker extends StatelessWidget {
+  final Channel channel;
+  final Widget child;
+  const _ChannelRowMarker({required this.channel, required this.child});
+  @override
+  Widget build(BuildContext context) => child;
 }
