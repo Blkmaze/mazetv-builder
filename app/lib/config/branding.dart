@@ -26,7 +26,7 @@ class Branding {
     required this.supportText,
     required this.portals,
     required this.pairBaseUrl,
-    this.repo = '',
+this.tmdbApiKey = '',     this.repo = '',
     this.buildNumber = 0,
     this.hasCustomLogo = false,
   });
@@ -69,3 +69,4 @@ class Portal {
   final String host;
   const Portal({required this.name, required this.host});
 }
+
