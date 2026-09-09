@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'package:http/http.dart' as http;
 import '../models/channel.dart';
 
@@ -27,7 +28,8 @@ class M3uService {
       throw Exception('Could not reach ${uri.host}${uri.hasPort ? ':${uri.port}' : ''} — ${_plain(e)}');
     }
     if (r.statusCode != 200) throw Exception('Portal answered HTTP ${r.statusCode}');
-    return parse(r.body);
+    final body = r.body;
+    return Isolate.run(() => parse(body)); // big playlists: keep the UI thread free
   }
 
   static String _plain(Object e) => e

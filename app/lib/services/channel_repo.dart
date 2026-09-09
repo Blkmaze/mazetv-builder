@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import '../models/account.dart';
 import '../models/channel.dart';
 import '../models/server_config.dart';
@@ -151,12 +152,19 @@ class ChannelRepo {
   Future<void> loadVod() async {
     final x = xtream;
     vodItems = x == null ? [] : await x.vodItems();
+    _popMovies = null;
   }
 
   Future<void> loadSeries() async {
     final x = xtream;
     seriesItems = x == null ? [] : await x.seriesItems();
+    _popSeries = null;
   }
+
+  // Cached: these were re-sorting the whole catalog on every Home rebuild
+  // (every focus change), which is a lot of work on a TV box.
+  List<VodItem>? _popMovies;
+  List<SeriesItem>? _popSeries;
 
   List<String> get vodGroups {
     final seen = <String>{};
@@ -210,11 +218,11 @@ class ChannelRepo {
   /// TMDB-trending matches when we have a good handful; otherwise newest-first.
   List<VodItem> get popularMovies => _trendingMovies.length >= 5
       ? _trendingMovies.take(20).toList()
-      : _popular(vodItems, year: (v) => v.year, added: (v) => v.added, rating: (v) => v.rating, id: (v) => v.id);
+      : _popMovies ??= _popular(vodItems, year: (v) => v.year, added: (v) => v.added, rating: (v) => v.rating, id: (v) => v.id);
 
   List<SeriesItem> get popularSeries => _trendingSeries.length >= 5
       ? _trendingSeries.take(20).toList()
-      : _popular(seriesItems, year: (s) => s.year, added: (s) => s.added, rating: (s) => s.rating, id: (s) => s.id);
+      : _popSeries ??= _popular(seriesItems, year: (s) => s.year, added: (s) => s.added, rating: (s) => s.rating, id: (s) => s.id);
 
   /// True when the Popular rows are coming from TMDB trending.
   bool get popularIsTrending => _trendingMovies.length >= 5 || _trendingSeries.length >= 5;
@@ -231,22 +239,30 @@ class ChannelRepo {
     if (apiKey.isEmpty || !supportsVod) return;
     final movies = await TmdbService.trendingMovies(apiKey);
     final tv = await TmdbService.trendingTv(apiKey);
-    _trendingMovies = _matchTrending(movies, vodItems, (v) => v.name, (v) => v.year);
-    _trendingSeries = _matchTrending(tv, seriesItems, (s) => s.name, (s) => s.year);
+    // Title normalization runs five regexes over every catalog entry —
+    // tens of thousands of them — so match in a worker isolate and only
+    // bring back the winning indexes.
+    final vodNames = [for (final v in vodItems) v.name], vodYears = [for (final v in vodItems) v.year];
+    final serNames = [for (final s in seriesItems) s.name], serYears = [for (final s in seriesItems) s.year];
+    final mi = await Isolate.run(() => _matchTrending(movies, vodNames, vodYears));
+    final si = await Isolate.run(() => _matchTrending(tv, serNames, serYears));
+    _trendingMovies = [for (final i in mi) if (i < vodItems.length) vodItems[i]];
+    _trendingSeries = [for (final i in si) if (i < seriesItems.length) seriesItems[i]];
   }
 
-  static List<T> _matchTrending<T>(List<TrendingTitle> trending, List<T> catalog,
-      String Function(T) name, int Function(T) year) {
-    if (trending.isEmpty || catalog.isEmpty) return const [];
+  /// Returns catalog indexes, in TMDB popularity order.
+  static List<int> _matchTrending(List<TrendingTitle> trending, List<String> names, List<int> years) {
+    if (trending.isEmpty || names.isEmpty) return const [];
+    int year(int i) => years[i];
     // index the catalog by normalized title once
-    final byKey = <String, List<T>>{};
-    for (final item in catalog) {
-      final k = TrendingTitle.norm(name(item));
+    final byKey = <String, List<int>>{};
+    for (var i = 0; i < names.length; i++) {
+      final k = TrendingTitle.norm(names[i]);
       if (k.length < 3) continue;
-      byKey.putIfAbsent(k, () => []).add(item);
+      byKey.putIfAbsent(k, () => []).add(i);
     }
-    final out = <T>[];
-    final seen = <T>{};
+    final out = <int>[];
+    final seen = <int>{};
     for (final t in trending) {
       var hits = byKey[t.key] ?? const [];
       if (hits.isEmpty && t.key.length >= 6) {

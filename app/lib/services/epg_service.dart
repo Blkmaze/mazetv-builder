@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml_events.dart';
 import '../models/channel.dart';
@@ -13,7 +14,17 @@ class EpgService {
     byChannel.clear();
     loaded = false;
     if (url.isEmpty || wantedIds.isEmpty) return;
+    // The XMLTV file can be 50–100MB+. Streaming it through the parser on
+    // the UI isolate starved input for a minute at a time on the Cube
+    // (ANR → "app isn't responding" → killed), so the whole download+parse
+    // runs in a worker isolate and only the finished map comes back.
+    final result = await Isolate.run(() => _parse(url, wantedIds, hoursAhead));
+    byChannel.addAll(result);
+    loaded = true;
+  }
 
+  static Future<Map<String, List<Programme>>> _parse(String url, Set<String> wantedIds, int hoursAhead) async {
+    final byChannel = <String, List<Programme>>{};
     final now = DateTime.now().toUtc();
     final windowEnd = now.add(Duration(hours: hoursAhead));
 
@@ -62,7 +73,7 @@ class EpgService {
     for (final l in byChannel.values) {
       l.sort((a, b) => a.start.compareTo(b.start));
     }
-    loaded = true;
+    return byChannel;
   }
 
   Programme? nowPlaying(String epgId) {

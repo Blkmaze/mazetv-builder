@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'package:http/http.dart' as http;
 import '../models/account.dart';
 import '../models/channel.dart';
@@ -20,6 +21,14 @@ class XtreamService {
   /// [timeout] defaults to 20s; the VOD/series catalogs can be tens of MB
   /// of JSON on a big provider, so those calls pass a much longer one.
   Future<dynamic> _get(Uri u, {Duration timeout = const Duration(seconds: 20)}) async {
+    final body = await _getBody(u, timeout: timeout);
+    // Decode off the UI thread. A big provider's catalog is tens of MB of
+    // JSON; decoding that on the main isolate froze the remote for the
+    // better part of a minute and got the app killed with an ANR.
+    return Isolate.run(() => _decode(body));
+  }
+
+  Future<String> _getBody(Uri u, {Duration timeout = const Duration(seconds: 20)}) async {
     http.Response r;
     try {
       r = await http.get(u).timeout(timeout);
@@ -27,12 +36,20 @@ class XtreamService {
       throw Exception('Could not reach ${u.host}:${u.port} — ${_plain(e)}');
     }
     if (r.statusCode != 200) throw Exception('Portal answered HTTP ${r.statusCode}');
+    return r.body;
+  }
+
+  static dynamic _decode(String body) {
     try {
-      return jsonDecode(r.body);
+      return jsonDecode(body);
     } catch (_) {
       throw Exception('Portal did not return JSON — check the server URL and port');
     }
   }
+
+  static Map<String, String> _catMap(dynamic cats) => {
+    for (final c in (cats as List)) c['category_id'].toString(): (c['category_name'] ?? '').toString()
+  };
 
   /// Strip the URL (carries credentials) and the raw OS-level address/port
   /// noise out of socket error text — that "port" is often just the local
@@ -59,11 +76,15 @@ class XtreamService {
   }
 
   Future<List<Channel>> liveChannels() async {
-    final cats = await _get(_api('get_live_categories')) as List;
-    final catName = {
-      for (final c in cats) c['category_id'].toString(): (c['category_name'] ?? '').toString()
-    };
-    final streams = await _get(_api('get_live_streams')) as List;
+    final catName = _catMap(await _get(_api('get_live_categories')));
+    final body = await _getBody(_api('get_live_streams'), timeout: const Duration(seconds: 60));
+    // Parse + build the model list in a worker isolate (see _get).
+    final base = _base, user = acct.username, pass = acct.password;
+    return Isolate.run(() => _parseLive(body, catName, base, user, pass));
+  }
+
+  static List<Channel> _parseLive(String body, Map<String, String> catName, String base, String user, String pass) {
+    final streams = _decode(body) as List;
     return streams.map((s) {
       final id = s['stream_id'].toString();
       return Channel(
@@ -71,7 +92,7 @@ class XtreamService {
         name: (s['name'] ?? '').toString(),
         group: catName[s['category_id']?.toString()] ?? 'Other',
         logo: (s['stream_icon'] ?? '').toString(),
-        streamUrl: '$_base/live/${acct.username}/${acct.password}/$id.ts',
+        streamUrl: '$base/live/$user/$pass/$id.ts',
         epgId: (s['epg_channel_id'] ?? '').toString(),
         tvArchive: (s['tv_archive'] ?? 0).toString() == '1',
         tvArchiveDuration: int.tryParse((s['tv_archive_duration'] ?? '0').toString()) ?? 0,
@@ -85,11 +106,14 @@ class XtreamService {
   // ---- VOD (movies) --------------------------------------------------------
 
   Future<List<VodItem>> vodItems() async {
-    final cats = await _get(_api('get_vod_categories'), timeout: const Duration(seconds: 60)) as List;
-    final catName = {
-      for (final c in cats) c['category_id'].toString(): (c['category_name'] ?? '').toString()
-    };
-    final streams = await _get(_api('get_vod_streams'), timeout: const Duration(seconds: 120)) as List;
+    final catName = _catMap(await _get(_api('get_vod_categories'), timeout: const Duration(seconds: 60)));
+    final body = await _getBody(_api('get_vod_streams'), timeout: const Duration(seconds: 120));
+    final base = _base, user = acct.username, pass = acct.password;
+    return Isolate.run(() => _parseVod(body, catName, base, user, pass));
+  }
+
+  static List<VodItem> _parseVod(String body, Map<String, String> catName, String base, String user, String pass) {
+    final streams = _decode(body) as List;
     return streams.map((s) {
       final id = s['stream_id'].toString();
       final ext = (s['container_extension'] ?? 'mp4').toString();
@@ -98,7 +122,7 @@ class XtreamService {
         name: (s['name'] ?? '').toString(),
         group: catName[s['category_id']?.toString()] ?? 'Other',
         cover: (s['stream_icon'] ?? s['cover'] ?? '').toString(),
-        streamUrl: '$_base/movie/${acct.username}/${acct.password}/$id.$ext',
+        streamUrl: '$base/movie/$user/$pass/$id.$ext',
         // plot deliberately omitted here: thousands of descriptions in memory
         // is what pushes small TV boxes over the limit. The detail page loads it.
         rating: _rating(s),
@@ -111,11 +135,13 @@ class XtreamService {
   // ---- Series ---------------------------------------------------------------
 
   Future<List<SeriesItem>> seriesItems() async {
-    final cats = await _get(_api('get_series_categories'), timeout: const Duration(seconds: 60)) as List;
-    final catName = {
-      for (final c in cats) c['category_id'].toString(): (c['category_name'] ?? '').toString()
-    };
-    final list = await _get(_api('get_series'), timeout: const Duration(seconds: 120)) as List;
+    final catName = _catMap(await _get(_api('get_series_categories'), timeout: const Duration(seconds: 60)));
+    final body = await _getBody(_api('get_series'), timeout: const Duration(seconds: 120));
+    return Isolate.run(() => _parseSeries(body, catName));
+  }
+
+  static List<SeriesItem> _parseSeries(String body, Map<String, String> catName) {
+    final list = _decode(body) as List;
     return list.map((s) {
       return SeriesItem(
         id: s['series_id'].toString(),
@@ -219,14 +245,18 @@ class XtreamService {
 
   /// Year from "year", "release_date"/"releaseDate" (yyyy-…), or a trailing
   /// "(2024)" in the title — providers are inconsistent about where it lives.
+  static final _yearAnyRe = RegExp(r'(19|20)\d{2}');
+  static final _yearWordRe = RegExp(r'\b(19|20)\d{2}\b');
   static int _year(Map s) {
-    for (final k in ['year', 'release_date', 'releaseDate', 'releasedate', 'released']) {
-      final m = RegExp(r'(19|20)\d{2}').firstMatch((s[k] ?? '').toString());
+    for (final k in const ['year', 'release_date', 'releaseDate', 'releasedate', 'released']) {
+      final v = s[k];
+      if (v == null) continue;
+      final m = _yearAnyRe.firstMatch(v.toString());
       if (m != null) return int.parse(m.group(0)!);
     }
     // "(2024)", "[2024]", or a bare "2024" anywhere in the title
     final name = (s['name'] ?? s['title'] ?? '').toString();
-    final m = RegExp(r'\b(19|20)\d{2}\b').allMatches(name).toList();
+    final m = _yearWordRe.allMatches(name).toList();
     if (m.isNotEmpty) return int.parse(m.last.group(0)!);
     return 0;
   }
