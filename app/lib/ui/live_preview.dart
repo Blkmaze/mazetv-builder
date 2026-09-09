@@ -41,10 +41,17 @@ class _LivePreviewStripState extends State<LivePreviewStrip> {
   @override
   void didUpdateWidget(covariant LivePreviewStrip old) {
     super.didUpdateWidget(old);
-    if (old.channel?.id != widget.channel?.id && widget.channel != null) {
-      _debounce?.cancel();
-      _debounce = Timer(const Duration(milliseconds: 350), () => _open(widget.channel!));
+    if (old.channel?.id == widget.channel?.id) return;
+    _debounce?.cancel();
+    if (widget.channel == null) {
+      // Handed off to the full-screen player: release this decoder so only
+      // one hardware decoder is alive at a time (two is what the Fire OS
+      // vendor decoder falls over on).
+      ++_openToken;
+      _player.stop();
+      return;
     }
+    _debounce = Timer(const Duration(milliseconds: 350), () => _open(widget.channel!));
   }
 
   Future<void> _open(Channel c) async {
@@ -62,7 +69,8 @@ class _LivePreviewStripState extends State<LivePreviewStrip> {
   void dispose() {
     _debounce?.cancel();
     _errSub?.cancel();
-    _player.dispose();
+    final p = _player;
+    p.stop().then((_) => p.dispose(), onError: (_) => p.dispose());
     super.dispose();
   }
 

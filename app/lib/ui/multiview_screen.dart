@@ -4,6 +4,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../models/channel.dart';
 import '../services/channel_repo.dart';
+import '../services/storage.dart';
 import '../services/live_stream_tuning.dart';
 import 'tv_widgets.dart';
 
@@ -35,6 +36,31 @@ class _MultiviewScreenState extends State<MultiviewScreen> {
     LogicalKeyboardKey.gameButtonA, LogicalKeyboardKey.space,
   };
 
+  @override
+  void initState() {
+    super.initState();
+    _restore();
+  }
+
+  /// Picks survive leaving the screen — and "Add to Multiview" from the
+  /// channel menu lands here too.
+  Future<void> _restore() async {
+    final ids = await Storage.multiviewIds();
+    final byId = {for (final c in ChannelRepo.I.channels) c.id: c};
+    final list = [for (final id in ids) if (byId[id] != null) byId[id]!];
+    if (!mounted || list.isEmpty) return;
+    _apply(list);
+  }
+
+  void _apply(List<Channel> list) {
+    setState(() {
+      picked..clear()..addAll(list.take(4));
+      keys..clear()..addAll(List.generate(picked.length, (_) => GlobalKey<_MultiCellState>()));
+      liveIndex = 0;
+      expanded = null;
+    });
+  }
+
   void _pickChannels() async {
     final repo = ChannelRepo.I;
     final result = await Navigator.push<List<Channel>>(
@@ -42,12 +68,8 @@ class _MultiviewScreenState extends State<MultiviewScreen> {
       MaterialPageRoute(builder: (_) => _ChannelPickerScreen(initiallyPicked: picked, allChannels: repo.channels)),
     );
     if (result == null) return;
-    setState(() {
-      picked..clear()..addAll(result);
-      keys..clear()..addAll(List.generate(picked.length, (_) => GlobalKey<_MultiCellState>()));
-      liveIndex = 0;
-      expanded = null;
-    });
+    await Storage.setMultiviewIds([for (final c in result) c.id]);
+    _apply(result);
   }
 
   void _expand(int i) => setState(() { liveIndex = i; expanded = i; });

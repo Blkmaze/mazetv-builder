@@ -152,6 +152,25 @@ class Storage {
     return (p.getStringList(_kFavPrefix + (profileId ?? 'shared')) ?? []).toSet();
   }
 
+  // ---- locked channels (per profile, like favorites) ---------------------
+  static const _kLockPrefix = 'locked_v1_';
+  static Future<Set<String>> lockedChannels(String? profileId) async {
+    final p = await SharedPreferences.getInstance();
+    return (p.getStringList(_kLockPrefix + (profileId ?? 'shared')) ?? []).toSet();
+  }
+
+  static Future<void> setLockedChannels(String? profileId, Set<String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(_kLockPrefix + (profileId ?? 'shared'), ids.toList());
+  }
+
+  // ---- multiview: the up-to-4 channels last picked -----------------------
+  static const _kMultiview = 'multiview_v1';
+  static Future<List<String>> multiviewIds() async =>
+      (await SharedPreferences.getInstance()).getStringList(_kMultiview) ?? [];
+  static Future<void> setMultiviewIds(List<String> ids) async =>
+      (await SharedPreferences.getInstance()).setStringList(_kMultiview, ids);
+
   static Future<void> setFavorites(String? profileId, Set<String> ids) async {
     final p = await SharedPreferences.getInstance();
     await p.setStringList(_kFavPrefix + (profileId ?? 'shared'), ids.toList());

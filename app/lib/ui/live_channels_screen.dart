@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/channel.dart';
 import '../services/channel_repo.dart';
+import '../services/recording_service.dart';
 import '../services/storage.dart';
 import 'live_preview.dart';
+import 'pin_screen.dart';
 import 'player_screen.dart';
 import 'section_rail.dart';
 import 'tv_widgets.dart';
@@ -30,15 +32,21 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
   String search = '';
   String? activeProfileId;
   Set<String> favorites = {};
+  Set<String> locked = {};
   final previewChannel = ValueNotifier<Channel?>(null);
   int _offsetMin = 0;          // how far the timeline is scrolled ahead of now
   final _listFocus = FocusNode();
+  final _catsFocus = FocusNode();
+  bool _catsOpen = true;       // categories pane slides away while the guide has focus
   final _railFocus = FocusNode();
   Timer? _clock;
 
   // Timeline geometry (shared by the header and every row so they line up).
+  // A fixed scale — ~100px per half hour, like Ghost — and however many
+  // hours fit in the width. Squeezing a fixed 3 hours into whatever was
+  // left made 10-minute blocks and overlapping labels on a 1080p TV.
   static const _nameColWidth = 230.0;
-  static const _windowHours = 3;
+  static const _catsWidth = 260.0;
 
   @override
   void initState() {
@@ -53,6 +61,7 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
   void dispose() {
     _clock?.cancel();
     _listFocus.dispose();
+    _catsFocus.dispose();
     _railFocus.dispose();
     previewChannel.dispose();
     super.dispose();
@@ -61,6 +70,7 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
   Future<void> _boot() async {
     activeProfileId = await Storage.activeProfileId();
     favorites = await Storage.favorites(activeProfileId);
+    locked = await Storage.lockedChannels(activeProfileId);
     group = repo.groups.isEmpty ? null : repo.groups.first;
     if (!mounted) return;
     final inGroup = repo.inGroup(group ?? '');
@@ -79,8 +89,141 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
     await Storage.setFavorites(activeProfileId, favorites);
   }
 
-  void _play(List<Channel> list, int index) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(playlist: list, index: index)));
+  Future<void> _play(List<Channel> list, int index) async {
+    if (locked.contains(list[index].id)) {
+      final pin = await Storage.settingsPin();
+      if (pin != null) {
+        if (!mounted) return;
+        final entered = await Navigator.push<String>(
+            context, MaterialPageRoute(builder: (_) => const PinScreen(title: 'Locked channel — enter PIN')));
+        if (entered != pin) {
+          if (entered != null && mounted) await showError(context, Exception('Incorrect PIN'));
+          return;
+        }
+      }
+    }
+    if (!mounted) return;
+    // Park the preview while the full player runs — one decoder at a time —
+    // and bring it back on the channel we return to.
+    final parked = previewChannel.value;
+    previewChannel.value = null;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(playlist: list, index: index)));
+    if (mounted) previewChannel.value = parked;
+  }
+
+  Future<void> _toggleLock(Channel c) async {
+    if (!locked.contains(c.id) && await Storage.settingsPin() == null) {
+      if (!mounted) return;
+      await showError(context, Exception('Set a PIN in Settings first — that PIN unlocks locked channels.'));
+      return;
+    }
+    setState(() {
+      if (!locked.remove(c.id)) locked.add(c.id);
+    });
+    await Storage.setLockedChannels(activeProfileId, locked);
+  }
+
+  Future<void> _toggleMultiview(Channel c) async {
+    final ids = await Storage.multiviewIds();
+    String msg;
+    if (ids.contains(c.id)) {
+      ids.remove(c.id);
+      msg = 'Removed ${c.name} from Multiview';
+    } else if (ids.length >= 4) {
+      msg = 'Multiview already has 4 channels — remove one first';
+    } else {
+      ids.add(c.id);
+      msg = 'Added ${c.name} to Multiview (${ids.length}/4)';
+    }
+    await Storage.setMultiviewIds(ids);
+    _toast(msg);
+  }
+
+  Future<void> _toggleRecord(Channel c) async {
+    final rec = RecordingService.I;
+    if (rec.isRecording && rec.current?.channelName == c.name) {
+      await rec.stop();
+      _toast('Stopped recording ${c.name}');
+      return;
+    }
+    final err = await rec.start(c.name, c.streamUrl);
+    _toast(err ?? 'Recording ${c.name}');
+  }
+
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 3)));
+  }
+
+  /// Hold OK on a channel: Ghost-style options box.
+  Future<void> _channelMenu(Channel c) async {
+    final isFav = favorites.contains(c.id);
+    final isLocked = locked.contains(c.id);
+    final inMulti = (await Storage.multiviewIds()).contains(c.id);
+    final rec = RecordingService.I;
+    final recordingThis = rec.isRecording && rec.current?.channelName == c.name;
+    if (!mounted) return;
+
+    final action = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final primary = Theme.of(ctx).colorScheme.primary;
+        return AlertDialog(
+          backgroundColor: const Color(0xFF14171F),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: primary.withOpacity(0.5), width: 1.5),
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 10),
+          title: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          contentPadding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          content: SizedBox(
+            width: 320,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              _MenuButton(
+                icon: isFav ? Icons.favorite : Icons.favorite_border,
+                label: isFav ? 'Remove from Favorites' : 'Add to Favorites',
+                autofocus: true,
+                onPressed: () => Navigator.pop(ctx, 'fav'),
+              ),
+              _MenuButton(
+                icon: isLocked ? Icons.lock_open : Icons.lock_outline,
+                label: isLocked ? 'Unlock channel' : 'Lock channel',
+                onPressed: () => Navigator.pop(ctx, 'lock'),
+              ),
+              _MenuButton(
+                icon: Icons.grid_view,
+                label: inMulti ? 'Remove from Multiview' : 'Add to Multiview',
+                onPressed: () => Navigator.pop(ctx, 'multi'),
+              ),
+              _MenuButton(
+                icon: Icons.fiber_manual_record,
+                iconColor: Colors.redAccent,
+                label: recordingThis ? 'Stop recording' : 'Record',
+                onPressed: () => Navigator.pop(ctx, 'rec'),
+              ),
+            ]),
+          ),
+          actionsAlignment: MainAxisAlignment.end,
+          actionsPadding: const EdgeInsets.fromLTRB(20, 0, 24, 14),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: TextButton.styleFrom(foregroundColor: primary),
+              child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+    switch (action) {
+      case 'fav': await _toggleFavorite(c); break;
+      case 'lock': await _toggleLock(c); break;
+      case 'multi': await _toggleMultiview(c); break;
+      case 'rec': await _toggleRecord(c); break;
+    }
   }
 
   void _openSearch() async {
@@ -150,11 +293,33 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
       if (_offsetMin < 12 * 60) setState(() => _offsetMin += 30);
       return KeyEventResult.handled;
     }
-    if (e.logicalKey == LogicalKeyboardKey.arrowLeft && _offsetMin > 0) {
-      setState(() => _offsetMin -= 30);
+    if (e.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      if (_offsetMin > 0) {
+        setState(() => _offsetMin -= 30);
+      } else {
+        // The pane is collapsed while we're here, so geometry-based
+        // traversal can't find it — jump to the selected category by hand.
+        _selectedCategoryNode()?.requestFocus();
+      }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  FocusNode? _selectedCategoryNode() {
+    final nodes = _catsFocus.traversalDescendants.toList();
+    for (final n in nodes) {
+      final ctx = n.context;
+      if (ctx == null) continue;
+      var sel = false;
+      ctx.visitAncestorElements((el) {
+        final w = el.widget;
+        if (w is TvTile) { sel = w.selected; return false; }
+        return true;
+      });
+      if (sel) return n;
+    }
+    return nodes.isEmpty ? null : nodes.first;
   }
 
   /// Programme search too: a channel matches if its name, or anything on it
@@ -201,12 +366,21 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
         const Divider(height: 1),
         Expanded(
           child: Row(children: [
-            // ---- categories
-            SizedBox(
-              width: 260,
-              child: Focus(
+            // ---- categories: full width while browsing them, slid away
+            // (still built, so focus can jump back) once the guide has focus
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: _catsOpen ? _catsWidth : 0,
+              clipBehavior: Clip.hardEdge,
+              decoration: const BoxDecoration(),
+              child: OverflowBox(
+                alignment: Alignment.centerLeft,
+                minWidth: _catsWidth, maxWidth: _catsWidth,
+                child: Focus(
+                focusNode: _catsFocus,
                 canRequestFocus: false,
                 skipTraversal: true,
+                onFocusChange: (has) { if (has != _catsOpen) setState(() => _catsOpen = has); },
                 onKeyEvent: _categoryKeys,
                 child: ListView.builder(
                 itemCount: groups.length,
@@ -223,13 +397,14 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
                   );
                 },
                 ),
+                ),
               ),
             ),
             const VerticalDivider(width: 1),
             // ---- this category's guide
             Expanded(
               child: Column(children: [
-                _TimelineHeader(windowStart: windowStart, hours: _windowHours, nameColWidth: _nameColWidth, scrolled: _offsetMin > 0),
+                _TimelineHeader(windowStart: windowStart, nameColWidth: _nameColWidth, scrolled: _offsetMin > 0),
                 const Divider(height: 1),
                 Expanded(
                   child: channels.isEmpty
@@ -270,16 +445,17 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
                                   child: _TimelineCell(
                                     channel: c,
                                     windowStart: windowStart,
-                                    hours: _windowHours,
                                   ),
                                 ),
                               ]),
                               trailing: SizedBox(
                                 width: 24,
-                                child: isFav ? const Icon(Icons.star, color: Colors.amber, size: 20) : null,
+                                child: locked.contains(c.id)
+                                    ? const Icon(Icons.lock, color: Colors.white54, size: 18)
+                                    : isFav ? const Icon(Icons.star, color: Colors.amber, size: 20) : null,
                               ),
                               onSelect: () => _play(channels, i),
-                              onLongSelect: () => _toggleFavorite(c),
+                              onLongSelect: () => _channelMenu(c),
                             ),
                             );
                           },
@@ -298,12 +474,14 @@ class _LiveChannelsScreenState extends State<LiveChannelsScreen> {
 
 /// "Sat, 10:23 PM" over the channel-name column, then half-hour labels
 /// across the timeline area — aligned to the same geometry as the rows.
+/// Pixels per minute of guide time. 30 min ≈ 100px reads well from a couch.
+const double kGuidePxPerMin = 3.4;
+
 class _TimelineHeader extends StatelessWidget {
   final DateTime windowStart;
-  final int hours;
   final double nameColWidth;
   final bool scrolled;
-  const _TimelineHeader({required this.windowStart, required this.hours, required this.nameColWidth, this.scrolled = false});
+  const _TimelineHeader({required this.windowStart, required this.nameColWidth, this.scrolled = false});
 
   // ListTile: 16 padding + 74 leading + 16 gap before the title.
   static const _leadIn = 16.0 + 74 + 16;
@@ -313,7 +491,6 @@ class _TimelineHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final slots = hours * 2;
     return SizedBox(
       height: 34,
       child: Row(children: [
@@ -330,8 +507,9 @@ class _TimelineHeader extends StatelessWidget {
         ),
         Expanded(
           child: LayoutBuilder(builder: (_, box) {
-            final slotW = box.maxWidth / slots;
-            return Stack(children: [
+            const slotW = 30 * kGuidePxPerMin;
+            final slots = (box.maxWidth / slotW).ceil();
+            return ClipRect(child: Stack(children: [
               for (var i = 0; i < slots; i++)
                 Positioned(
                   left: i * slotW, top: 0, bottom: 0,
@@ -346,7 +524,7 @@ class _TimelineHeader extends StatelessWidget {
                     );
                   }),
                 ),
-            ]);
+            ]));
           }),
         ),
         const SizedBox(width: _tailOut),
@@ -363,21 +541,19 @@ class _TimelineHeader extends StatelessWidget {
 class _TimelineCell extends StatelessWidget {
   final Channel channel;
   final DateTime windowStart;
-  final int hours;
-  const _TimelineCell({required this.channel, required this.windowStart, required this.hours});
+  const _TimelineCell({required this.channel, required this.windowStart});
 
   @override
   Widget build(BuildContext context) {
     final repo = ChannelRepo.I;
     final accent = Theme.of(context).colorScheme.primary;
-    final windowEnd = windowStart.add(Duration(hours: hours));
-    final windowMin = hours * 60;
     final now = DateTime.now();
 
     return SizedBox(
       height: 46,
       child: LayoutBuilder(builder: (_, box) {
-        final pxPerMin = box.maxWidth / windowMin;
+        const pxPerMin = kGuidePxPerMin;
+        final windowEnd = windowStart.add(Duration(minutes: (box.maxWidth / pxPerMin).ceil()));
         final nowX = now.difference(windowStart).inMinutes * pxPerMin;
 
         Widget content;
@@ -441,4 +617,46 @@ class _ChannelRowMarker extends StatelessWidget {
   const _ChannelRowMarker({required this.channel, required this.child});
   @override
   Widget build(BuildContext context) => child;
+}
+
+/// One row in the hold-OK channel menu — focusable, lights up on the remote.
+class _MenuButton extends StatelessWidget {
+  final IconData icon;
+  final Color? iconColor;
+  final String label;
+  final bool autofocus;
+  final VoidCallback onPressed;
+  const _MenuButton({required this.icon, required this.label, required this.onPressed, this.iconColor, this.autofocus = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Focus(
+        autofocus: autofocus,
+        child: Builder(builder: (ctx) {
+          final focused = Focus.of(ctx).hasFocus;
+          return InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(8),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
+              decoration: BoxDecoration(
+                color: focused ? primary.withOpacity(0.35) : Colors.white.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: focused ? primary : Colors.transparent, width: 1.5),
+              ),
+              child: Row(children: [
+                Icon(icon, size: 18, color: iconColor ?? (focused ? Colors.white : Colors.white70)),
+                const SizedBox(width: 12),
+                Expanded(child: Text(label, style: TextStyle(fontSize: 15, fontWeight: focused ? FontWeight.bold : FontWeight.w500))),
+              ]),
+            ),
+          );
+        }),
+      ),
+    );
+  }
 }

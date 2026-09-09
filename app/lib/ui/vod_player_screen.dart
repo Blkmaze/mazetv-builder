@@ -119,7 +119,11 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     _hide?.cancel();
     _saveTimer?.cancel();
     for (final s in _subs) { s.cancel(); }
-    player.dispose();
+    // Native crash guard: on Fire OS the app segfaults (SIGSEGV on the
+    // main thread, inside libmpv) if the player is freed while the hardware
+    // decoder is still tearing down. Stop first, free after it settles.
+    final p = player;
+    p.stop().then((_) => p.dispose(), onError: (_) => p.dispose());
     super.dispose();
   }
 
