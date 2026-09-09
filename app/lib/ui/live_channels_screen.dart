@@ -635,6 +635,18 @@ class _MenuButton extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Focus(
         autofocus: autofocus,
+        // The remote's OK lands here as a key event, not a tap — the
+        // InkWell only sees taps, so activate on select/enter ourselves.
+        onKeyEvent: (node, e) {
+          if (e is! KeyDownEvent) return KeyEventResult.ignored;
+          final k = e.logicalKey;
+          if (k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.enter ||
+              k == LogicalKeyboardKey.numpadEnter || k == LogicalKeyboardKey.gameButtonA) {
+            onPressed();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
         child: Builder(builder: (ctx) {
           final focused = Focus.of(ctx).hasFocus;
           return InkWell(

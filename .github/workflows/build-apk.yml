@@ -101,7 +101,13 @@ jobs:
         working-directory: build/proj
         run: |
           flutter pub get
-          flutter build apk --release --target-platform android-arm,android-arm64
+          flutter --version
+          # --split-debug-info keeps a symbol file for the Dart AOT code so a
+          # native crash address (pc ...) from logcat can be mapped back to a
+          # Dart function. Zipped and attached to the release below.
+          flutter build apk --release --target-platform android-arm,android-arm64 \
+            --split-debug-info=build/symbols
+          (cd build/symbols && zip -q -r ../../../../symbols-${{ github.run_number }}.zip .)
 
       - name: Sign APK
         env:
@@ -137,4 +143,6 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           name: ${{ inputs.app_name }} build ${{ github.run_number }}
-          files: ${{ env.APK_NAME }}
+          files: |
+            ${{ env.APK_NAME }}
+            symbols-${{ github.run_number }}.zip
