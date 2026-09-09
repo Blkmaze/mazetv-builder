@@ -99,7 +99,7 @@ s = s.replace("<application", perms + "    <application", 1)
 if "installLocation" not in s:
     s = s.replace("<manifest ", '<manifest android:installLocation="internalOnly" ', 1)
 s = re.sub(r'android:label="[^"]*"', f'android:label="{a.app_name}"', s, count=1)
-s = s.replace("<application", '<application\n        android:banner="@mipmap/ic_banner"\n        android:usesCleartextTraffic="true"', 1)
+s = s.replace("<application", '<application\n        android:banner="@drawable/ic_banner"\n        android:usesCleartextTraffic="true"', 1)
 s = s.replace('<category android:name="android.intent.category.LAUNCHER"/>',
               '<category android:name="android.intent.category.LAUNCHER"/>\n'
               '                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>', 1)
@@ -151,6 +151,13 @@ try:
 except Exception:
     f = ImageFont.load_default()
 d.text((175, 76), a.app_name[:14], font=f, fill="white")
+# Android TV spec: the banner is a *drawable*, 320x180 at xhdpi, scaled per
+# density. A lone mipmap-xhdpi file left Fire TV showing a grey tile.
+for dname, scale in {"mdpi": 0.5, "hdpi": 0.75, "xhdpi": 1.0, "xxhdpi": 1.5, "xxxhdpi": 2.0}.items():
+    os.makedirs(f"{res}/drawable-{dname}", exist_ok=True)
+    w, h = int(320 * scale), int(180 * scale)
+    ban.resize((w, h), Image.LANCZOS).convert("RGB").save(f"{res}/drawable-{dname}/ic_banner.png")
+# keep the old location too so nothing that still says @mipmap breaks
 os.makedirs(f"{res}/mipmap-xhdpi", exist_ok=True)
-ban.save(f"{res}/mipmap-xhdpi/ic_banner.png")
+ban.convert("RGB").save(f"{res}/mipmap-xhdpi/ic_banner.png")
 print("[brand] icons + TV banner generated")
