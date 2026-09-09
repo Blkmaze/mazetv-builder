@@ -133,6 +133,18 @@ class XtreamService {
   /// number. Xtream returns these grouped by season under "episodes".
   Future<VodInfo> vodInfo(String vodId) async {
     final j = await _get(_api('get_vod_info', {'vod_id': vodId})) as Map<String, dynamic>;
+    return _infoFrom(j);
+  }
+
+  /// Same shape as vodInfo but for a series: plot, cast, genre, rating and
+  /// backdrop. Xtream's get_series_info carries an "info" block just like
+  /// get_vod_info does, so the two parse identically.
+  Future<VodInfo> seriesInfo(String seriesId) async {
+    final j = await _get(_api('get_series_info', {'series_id': seriesId})) as Map<String, dynamic>;
+    return _infoFrom(j);
+  }
+
+  VodInfo _infoFrom(Map<String, dynamic> j) {
     final info = (j['info'] is Map) ? j['info'] as Map : const {};
     String str(String k) => (info[k] ?? '').toString();
     String backdrop = '';

@@ -1,6 +1,6 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemNavigator;
+import 'package:flutter/services.dart' show KeyDownEvent, KeyEvent, LogicalKeyboardKey, SystemNavigator;
 import '../config/branding.dart';
 import '../models/channel.dart';
 import '../models/profile.dart';
@@ -15,6 +15,10 @@ import 'player_screen.dart';
 import 'profiles_screen.dart';
 import 'series_detail_screen.dart';
 import 'section_rail.dart';
+import 'home_hero.dart';
+import 'movies_screen.dart';
+import 'recordings_screen.dart';
+import 'series_screen.dart';
 import 'servers_screen.dart';
 import 'settings_screen.dart';
 import 'tv_widgets.dart';
@@ -33,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? activeProfileId;
   List<Channel> mostWatched = [];
   String _backdrop = '';
+  HeroPick? _hero;
 
   @override
   void initState() {
@@ -226,8 +231,34 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: s)));
   }
 
-  void _setBackdrop(String cover) {
-    if (cover != _backdrop && mounted) setState(() => _backdrop = cover);
+  /// A poster got focus: swap the blurred wallpaper and the hero banner.
+  void _showcase(HeroPick pick) {
+    if (!mounted) return;
+    if (pick.cover != _backdrop || pick.cacheKey != _hero?.cacheKey) {
+      setState(() {
+        _backdrop = pick.cover;
+        _hero = pick;
+      });
+    }
+  }
+
+  /// Colored remote buttons, matching the legend bottom-right:
+  /// red = Record(ings), green = Search, yellow = Movies, blue = Series.
+  /// Fire TV remotes don't carry these keys; Android TV boxes and many
+  /// universal remotes do, and the legend reads the same either way.
+  KeyEventResult _onColorKey(FocusNode node, KeyEvent e) {
+    if (e is! KeyDownEvent) return KeyEventResult.ignored;
+    final k = e.logicalKey;
+    if (k == LogicalKeyboardKey.colorF0Red) { _openScreen(const RecordingsScreen()); return KeyEventResult.handled; }
+    if (k == LogicalKeyboardKey.colorF1Green) { _openSearch(); return KeyEventResult.handled; }
+    if (k == LogicalKeyboardKey.colorF2Yellow) { _openScreen(const MoviesScreen()); return KeyEventResult.handled; }
+    if (k == LogicalKeyboardKey.colorF3Blue) { _openScreen(const SeriesScreen()); return KeyEventResult.handled; }
+    return KeyEventResult.ignored;
+  }
+
+  Future<void> _openScreen(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    await _loadMostWatched();
   }
 
   /// Top bar: logo (Hero landing spot for the splash), app name, active server.
@@ -264,12 +295,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final popularMovies = repo.supportsVod ? repo.popularMovies : const <VodItem>[];
     final popularSeries = repo.supportsVod ? repo.popularSeries : const <SeriesItem>[];
+    // Before the remote lands on anything, showcase the top Popular title.
+    final heroPick = _hero ??
+        (popularMovies.isNotEmpty
+            ? HeroPick.movie(popularMovies.first)
+            : (popularSeries.isNotEmpty ? HeroPick.series(popularSeries.first) : null));
 
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _confirmExit();
       },
+      child: Focus(
+      onKeyEvent: _onColorKey,
       child: Scaffold(
       body: Stack(children: [
         // ---- blurred backdrop of whichever poster is highlighted (Ghost-style)
@@ -320,6 +358,8 @@ class _HomeScreenState extends State<HomeScreen> {
             // ---- discovery: most-watched channels, then Movies/Series posters
             Expanded(
               child: ListView(padding: const EdgeInsets.symmetric(vertical: 16), children: [
+                // ---- Ghost-style hero: follows whichever poster is highlighted
+                if (heroPick != null) HomeHero(pick: heroPick),
                 if (mostWatched.isNotEmpty) ...[
                   const _RowHeader(title: 'Your Most Watched Channels'),
                   SizedBox(
@@ -369,7 +409,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               title: v.year > 0 && !v.name.contains('${v.year}') ? '${v.name} (${v.year})' : v.name,
                               cover: v.cover,
                               autofocus: i == 0,
-                              onFocusChange: (has) { if (has) _setBackdrop(v.cover); },
+                              onFocusChange: (has) { if (has) _showcase(HeroPick.movie(v)); },
                               onSelect: () => _openMovie(v),
                             ),
                           ),
@@ -396,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: PosterTile(
                               title: s.year > 0 && !s.name.contains('${s.year}') ? '${s.name} (${s.year})' : s.name,
                               cover: s.cover,
-                              onFocusChange: (has) { if (has) _setBackdrop(s.cover); },
+                              onFocusChange: (has) { if (has) _showcase(HeroPick.series(s)); },
                               onSelect: () => _openSeries(s),
                             ),
                           ),
@@ -442,7 +482,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ]),
         ),
       ]),
+        // ---- colored button legend (Ghost puts it bottom-right)
+        const Positioned(right: 18, bottom: 14, child: ButtonLegend()),
       ]),
+      ),
       ),
     );
   }
