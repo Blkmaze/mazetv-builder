@@ -252,7 +252,8 @@ class _Dot extends StatelessWidget {
 /// Ghost's bottom-right legend: a colored dot per remote button and what it
 /// does on Home. Purely a label — the key handling lives on HomeScreen.
 class ButtonLegend extends StatelessWidget {
-  const ButtonLegend({super.key});
+  final bool showRecord;
+  const ButtonLegend({super.key, this.showRecord = true});
 
   static const List<(Color, String)> items = [
     (Color(0xFFE53935), 'Record'),
@@ -263,6 +264,7 @@ class ButtonLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final items = showRecord ? ButtonLegend.items : ButtonLegend.items.sublist(1);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(

@@ -16,6 +16,7 @@ class Branding {
   final String repo;           // "owner/name" this build was published from, for OTA checks
   final int buildNumber;       // this build's GitHub Actions run number
   final bool hasCustomLogo;    // true if icon_url was set (assets/logo.png is your art, not a placeholder)
+  final bool vodOnly;          // movies & series only — Live TV, guide, catch-up, multiview, recordings removed
 
   const Branding({
     required this.appName,
@@ -29,6 +30,7 @@ class Branding {
 this.tmdbApiKey = '',     this.repo = '',
     this.buildNumber = 0,
     this.hasCustomLogo = false,
+    this.vodOnly = false,
   });
 
 
@@ -54,6 +56,7 @@ this.tmdbApiKey = '',     this.repo = '',
       repo: j['repo'] ?? '',
       buildNumber: (j['build_number'] as num?)?.toInt() ?? 0,
       hasCustomLogo: j['has_custom_logo'] == true,
+      vodOnly: j['vod_only'] == true,
     );
   }
 

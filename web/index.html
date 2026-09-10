@@ -137,6 +137,7 @@
           <label>VPN profile URL <small>.ovpn file for the built-in VPN</small>
             <input type="url" id="vpn_url">
           </label>
+          <label><input type="checkbox" id="vod_only"> Movies &amp; series only <small>no Live TV, guide, catch-up, multiview or recordings</small></label>
         </div>
       </details>
 
@@ -178,6 +179,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const fields = ["app_name","package_id","primary_color","icon_url","support_text","portal_url","epg_url","vpn_url","portals","pair_base_url","tmdb_api_key"];
+const boolFields = ["vod_only"];
 
 // ---- live preview
 function initials(n) { return (n.trim().split(/\s+/).slice(0,2).map(w => w[0] || "").join("") || "TV").toUpperCase(); }
@@ -209,6 +211,7 @@ $("f").addEventListener("submit", async (e) => {
   e.preventDefault();
   clearInterval(poll); $("result").hidden = true; $("runlink").hidden = true;
   const body = Object.fromEntries(fields.map(id => [id, $(id).value])); body.password = $("password").value;
+  boolFields.forEach(id => body[id] = $(id).checked);
   $("go").disabled = true; setStatus("building", "Starting the build…");
   const r = await fetch("/.netlify/functions/build", { method: "POST", body: JSON.stringify(body) }).then(r => r.json());
   if (r.error) { setStatus("failed", r.error); $("go").disabled = false; return; }

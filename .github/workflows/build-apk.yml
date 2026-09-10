@@ -39,6 +39,11 @@ on:
         description: 'Pre-configured servers as JSON — if set, login shows a picker instead of a raw URL field'
         required: false
         default: '[{"name":"Prada","host":"http://pradahype.com:33726"},{"name":"CDN","host":"http://kytv.xyz"},{"name":"XYZ Live","host":"https://live.xyzchd.io:443"},{"name":"BlackLabel","host":"https://blacklabelx.online:443"}]'
+      vod_only:
+        description: "Movies & series only (no Live TV, guide, catch-up, multiview or recordings)"
+        required: false
+        type: boolean
+        default: false
       tmdb_api_key:
         description: "Optional TMDB v3 API key — makes Popular Movies/Series use TMDB's weekly trending (leave blank to use the TMDB_API_KEY repo secret if set)"
         required: false
@@ -95,7 +100,8 @@ jobs:
             --pair-base-url "${{ inputs.pair_base_url }}" \
             --tmdb-api-key "${{ inputs.tmdb_api_key || secrets.TMDB_API_KEY }}" \
             --repo "${{ github.repository }}" \
-            --build-number "${{ github.run_number }}"
+            --build-number "${{ github.run_number }}" \
+            --vod-only "${{ inputs.vod_only }}"
 
       - name: Build APK
         working-directory: build/proj

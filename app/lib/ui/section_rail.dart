@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/branding.dart';
 import 'package:flutter/services.dart';
 import 'catchup_screen.dart';
 import 'live_channels_screen.dart';
@@ -96,27 +97,31 @@ class SectionRail extends StatelessWidget {
       TvRailTile(icon: Icons.home, label: 'Home', expanded: expanded,
           selected: current == AppSection.home, autofocus: homeAutofocus, focusNode: nodeFor(AppSection.home),
           onSelect: () => _go(context, AppSection.home, (_) => const SizedBox())),
-      TvRailTile(icon: Icons.live_tv, label: 'Live', expanded: expanded,
-          selected: current == AppSection.live, focusNode: nodeFor(AppSection.live),
-          onSelect: () => _go(context, AppSection.live, (_) => const LiveChannelsScreen())),
-      TvRailTile(icon: Icons.history, label: 'Catchup', expanded: expanded,
-          selected: current == AppSection.catchup, focusNode: nodeFor(AppSection.catchup),
-          onSelect: () => _go(context, AppSection.catchup, (_) => const CatchupScreen())),
+      if (!Branding.I.vodOnly) ...[
+        TvRailTile(icon: Icons.live_tv, label: 'Live', expanded: expanded,
+            selected: current == AppSection.live, focusNode: nodeFor(AppSection.live),
+            onSelect: () => _go(context, AppSection.live, (_) => const LiveChannelsScreen())),
+        TvRailTile(icon: Icons.history, label: 'Catchup', expanded: expanded,
+            selected: current == AppSection.catchup, focusNode: nodeFor(AppSection.catchup),
+            onSelect: () => _go(context, AppSection.catchup, (_) => const CatchupScreen())),
+      ],
       TvRailTile(icon: Icons.movie, label: 'Movies', expanded: expanded,
           selected: current == AppSection.movies, focusNode: nodeFor(AppSection.movies),
           onSelect: () => _go(context, AppSection.movies, (_) => const MoviesScreen())),
       TvRailTile(icon: Icons.video_library, label: 'Series', expanded: expanded,
           selected: current == AppSection.series, focusNode: nodeFor(AppSection.series),
           onSelect: () => _go(context, AppSection.series, (_) => const SeriesScreen())),
-      TvRailTile(icon: Icons.groups, label: 'Watch Party', expanded: expanded,
-          selected: current == AppSection.watchParty, focusNode: nodeFor(AppSection.watchParty),
-          onSelect: () => _go(context, AppSection.watchParty, (_) => const WatchPartyScreen())),
-      TvRailTile(icon: Icons.grid_view, label: 'Multiview', expanded: expanded,
-          selected: current == AppSection.multiview, focusNode: nodeFor(AppSection.multiview),
-          onSelect: () => _go(context, AppSection.multiview, (_) => const MultiviewScreen())),
-      TvRailTile(icon: Icons.fiber_manual_record, label: 'Recordings', expanded: expanded,
-          selected: current == AppSection.recordings, focusNode: nodeFor(AppSection.recordings),
-          onSelect: () => _go(context, AppSection.recordings, (_) => const RecordingsScreen())),
+      if (!Branding.I.vodOnly) ...[
+        TvRailTile(icon: Icons.groups, label: 'Watch Party', expanded: expanded,
+            selected: current == AppSection.watchParty, focusNode: nodeFor(AppSection.watchParty),
+            onSelect: () => _go(context, AppSection.watchParty, (_) => const WatchPartyScreen())),
+        TvRailTile(icon: Icons.grid_view, label: 'Multiview', expanded: expanded,
+            selected: current == AppSection.multiview, focusNode: nodeFor(AppSection.multiview),
+            onSelect: () => _go(context, AppSection.multiview, (_) => const MultiviewScreen())),
+        TvRailTile(icon: Icons.fiber_manual_record, label: 'Recordings', expanded: expanded,
+            selected: current == AppSection.recordings, focusNode: nodeFor(AppSection.recordings),
+            onSelect: () => _go(context, AppSection.recordings, (_) => const RecordingsScreen())),
+      ],
       const SizedBox(height: 24),
       TvRailTile(icon: Icons.settings, label: 'Settings', expanded: expanded,
           onSelect: onSettings ?? () {

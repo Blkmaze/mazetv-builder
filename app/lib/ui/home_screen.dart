@@ -249,7 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
   KeyEventResult _onColorKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
-    if (k == LogicalKeyboardKey.colorF0Red) { _openScreen(const RecordingsScreen()); return KeyEventResult.handled; }
+    if (k == LogicalKeyboardKey.colorF0Red && !Branding.I.vodOnly) { _openScreen(const RecordingsScreen()); return KeyEventResult.handled; }
     if (k == LogicalKeyboardKey.colorF1Green) { _openSearch(); return KeyEventResult.handled; }
     if (k == LogicalKeyboardKey.colorF2Yellow) { _openScreen(const MoviesScreen()); return KeyEventResult.handled; }
     if (k == LogicalKeyboardKey.colorF3Blue) { _openScreen(const SeriesScreen()); return KeyEventResult.handled; }
@@ -360,7 +360,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView(padding: const EdgeInsets.symmetric(vertical: 16), children: [
                 // ---- Ghost-style hero: follows whichever poster is highlighted
                 if (heroPick != null) HomeHero(pick: heroPick),
-                if (mostWatched.isNotEmpty) ...[
+                if (mostWatched.isNotEmpty && !Branding.I.vodOnly) ...[
                   const _RowHeader(title: 'Your Most Watched Channels'),
                   SizedBox(
                     height: _MostWatchedTile.rowHeight,
@@ -483,7 +483,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ]),
         // ---- colored button legend (Ghost puts it bottom-right)
-        const Positioned(right: 18, bottom: 14, child: ButtonLegend()),
+        Positioned(right: 18, bottom: 14, child: ButtonLegend(showRecord: !Branding.I.vodOnly)),
       ]),
       ),
       ),

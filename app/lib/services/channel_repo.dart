@@ -6,6 +6,7 @@ import '../models/vod.dart';
 import 'epg_service.dart';
 import 'm3u_service.dart';
 import 'tmdb_service.dart';
+import '../config/branding.dart';
 import 'xtream_service.dart';
 
 /// One place that knows how to turn an Account into channels + EPG, and how
@@ -41,7 +42,9 @@ class ChannelRepo {
     if (a.type == SourceType.xtream) {
       final x = XtreamService(a);
       await x.login();
-      allChannels = await x.liveChannels();
+      // VOD-only builds never show live channels, so don't pull the list
+      // (often the biggest download) or its guide.
+      allChannels = Branding.I.vodOnly ? [] : await x.liveChannels();
       applyFilters();
       epgUrl = a.epgUrl.isNotEmpty ? a.epgUrl : x.epgUrl;
     } else {
@@ -86,6 +89,7 @@ class ChannelRepo {
 
   /// Fire-and-forget; UI listens via [onEpgLoaded].
   Future<void> loadEpg() async {
+    if (Branding.I.vodOnly) return;
     final ids = channels.map((c) => c.epgId).where((e) => e.isNotEmpty).toSet();
     try {
       await epg.load(epgUrl, ids);

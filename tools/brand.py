@@ -31,6 +31,7 @@ ap.add_argument("--pair-base-url", default="")
 ap.add_argument("--tmdb-api-key", default="", help="optional TMDB v3 API key for real Popular rows")
 ap.add_argument("--repo", default="", help="owner/name this build is published from (for in-app OTA update checks)")
 ap.add_argument("--build-number", default="0", help="GitHub Actions run number for this build")
+ap.add_argument("--vod-only", default="false", help="true = movies & series only; Live TV, guide, catch-up, multiview and recordings are removed")
 a = ap.parse_args()
 
 P = a.project
@@ -55,6 +56,7 @@ with open(f"{P}/assets/branding.json", "w") as f:
         "portals": portals, "pair_base_url": a.pair_base_url, "tmdb_api_key": a.tmdb_api_key,
         "repo": a.repo, "build_number": int(a.build_number or 0),
         "has_custom_logo": True,
+        "vod_only": str(a.vod_only).strip().lower() in ("1", "true", "yes", "on"),
     }, f, indent=2)
 print("[brand] wrote branding.json")
 

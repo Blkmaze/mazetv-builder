@@ -18,6 +18,7 @@ exports.handler = async (event) => {
       portals: (b.portals || "[]").trim(),
       pair_base_url: (b.pair_base_url || "").trim(),
       tmdb_api_key: (b.tmdb_api_key || "").trim(),
+      vod_only: b.vod_only === true || b.vod_only === "true",
     };
     if (!inputs.app_name) return json(400, { error: "App name is required" });
     if (!/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(inputs.package_id))
