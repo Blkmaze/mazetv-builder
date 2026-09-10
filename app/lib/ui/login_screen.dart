@@ -25,7 +25,27 @@ class _LoginScreenState extends State<LoginScreen> {
   final epg = TextEditingController(text: Branding.I.epgUrl);
   bool busy = false;
   bool manualHost = false; // "Other server" was picked from the provider list
+  bool showEpg = false;    // EPG URL is optional for Xtream; hidden until asked for
   Portal? picked;
+  final _signIn = FocusNode();
+  final _signInKey = GlobalKey();
+
+  /// Keyboard Done on the last field: land on Sign in and make sure it's on
+  /// screen — on a 1080p TV the button sits below the fold while typing, so
+  /// it looked like there was no Sign in button at all.
+  void _toSignIn() {
+    _signIn.requestFocus();
+    Future.delayed(const Duration(milliseconds: 80), () {
+      final ctx = _signInKey.currentContext;
+      if (ctx != null && mounted) Scrollable.ensureVisible(ctx, alignment: 0.5, duration: const Duration(milliseconds: 200));
+    });
+  }
+
+  @override
+  void dispose() {
+    _signIn.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -123,15 +143,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 ] else
                   TvTextField(controller: host, label: 'Server URL (http://host:port)', autofocus: true),
                 TvTextField(controller: user, label: 'Username', autofocus: hasPortals && !manualHost),
-                TvTextField(controller: pass, label: 'Password', obscure: true),
+                TvTextField(controller: pass, label: 'Password', obscure: true,
+                    last: !showEpg, onDone: _toSignIn),
+                if (showEpg)
+                  TvTextField(controller: epg, label: 'EPG URL (optional XMLTV)', last: true, onDone: _toSignIn),
               ] else ...[
                 TvTextField(controller: m3u, label: 'Playlist URL (.m3u / .m3u8)', autofocus: true),
+                TvTextField(controller: epg, label: 'EPG URL (optional XMLTV)', last: true, onDone: _toSignIn),
               ],
-              TvTextField(controller: epg, label: 'EPG URL (optional XMLTV)', last: true),
               const SizedBox(height: 20),
               busy
                   ? const Center(child: CircularProgressIndicator())
-                  : TvButton(label: 'Sign in', icon: Icons.play_arrow, onPressed: _go),
+                  : KeyedSubtree(
+                      key: _signInKey,
+                      child: TvButton(label: 'Sign in', icon: Icons.play_arrow, onPressed: _go, focusNode: _signIn),
+                    ),
+              if (mode == SourceType.xtream && !showEpg)
+                TextButton(
+                  onPressed: () => setState(() => showEpg = true),
+                  child: const Text('Add a custom EPG URL (optional)', style: TextStyle(color: Colors.white54)),
+                ),
               if (hasPairing) ...[
                 const SizedBox(height: 12),
                 TextButton.icon(

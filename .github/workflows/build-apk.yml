@@ -116,8 +116,10 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk ../universal.apk
           # ... plus one per CPU type, each less than half the size. The in-app
           # updater picks whichever matches the device.
-          flutter build apk --release --target-platform android-arm,android-arm64 \
-            --split-per-abi --split-debug-info=build/symbols
+          # (no --target-platform here: combined with --split-per-abi it makes
+          # Flutter set both ndk.abiFilters and splits, which Gradle rejects.
+          # An x86_64 APK gets built too; it just isn't published.)
+          flutter build apk --release --split-per-abi --split-debug-info=build/symbols
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk ../arm.apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../arm64.apk
           (cd build/symbols && zip -q -r ../../../../symbols-${{ github.run_number }}.zip .)

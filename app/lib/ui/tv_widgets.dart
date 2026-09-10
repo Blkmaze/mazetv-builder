@@ -382,8 +382,11 @@ class TvTextField extends StatefulWidget {
   final bool obscure;
   final bool autofocus;
   final bool last;
+  /// Called when the keyboard's Done key is pressed on a [last] field —
+  /// use it to hand focus to the submit button.
+  final VoidCallback? onDone;
   const TvTextField({super.key, required this.controller, required this.label,
-      this.obscure = false, this.autofocus = false, this.last = false});
+      this.obscure = false, this.autofocus = false, this.last = false, this.onDone});
   @override
   State<TvTextField> createState() => _TvTextFieldState();
 }
@@ -437,8 +440,9 @@ class _TvTextFieldState extends State<TvTextField> {
         obscureText: widget.obscure,
         autofocus: widget.autofocus,
         textInputAction: widget.last ? TextInputAction.done : TextInputAction.next,
-        // No onSubmitted: TextInputAction.next/done already move or close focus.
-        // Doing it here too moved focus twice and skipped the next field.
+        // Next already moves focus on its own (doing it here too skipped a
+        // field). Done just closes the keyboard, so that one gets a hook.
+        onSubmitted: widget.last && widget.onDone != null ? (_) => widget.onDone!() : null,
         style: const TextStyle(fontSize: 20),
         decoration: InputDecoration(labelText: widget.label, border: const OutlineInputBorder()),
       ),
