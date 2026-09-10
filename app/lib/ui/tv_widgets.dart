@@ -391,13 +391,41 @@ class TvTextField extends StatefulWidget {
 class _TvTextFieldState extends State<TvTextField> {
   late final FocusNode node = FocusNode(onKeyEvent: (n, e) {
     if (e is! KeyDownEvent) return KeyEventResult.ignored;
-    if (e.logicalKey == LogicalKeyboardKey.arrowDown) { n.nextFocus(); return KeyEventResult.handled; }
-    if (e.logicalKey == LogicalKeyboardKey.arrowUp) { n.previousFocus(); return KeyEventResult.handled; }
+    final k = e.logicalKey;
+    if (k == LogicalKeyboardKey.arrowDown) { n.nextFocus(); return KeyEventResult.handled; }
+    if (k == LogicalKeyboardKey.arrowUp) { n.previousFocus(); return KeyEventResult.handled; }
+    // OK on the remote: Flutter only opens the keyboard for taps, so a
+    // d-pad user sitting on a field would otherwise get nothing.
+    if (k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.enter ||
+        k == LogicalKeyboardKey.numpadEnter || k == LogicalKeyboardKey.gameButtonA) {
+      _showKeyboard();
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
   });
 
   @override
-  void dispose() { node.dispose(); super.dispose(); }
+  void initState() {
+    super.initState();
+    node.addListener(_onFocus);
+  }
+
+  /// Fire OS closes the keyboard on the "Next" action and doesn't reopen it
+  /// for the field that gains focus. Ask for it again once focus has landed.
+  void _onFocus() {
+    if (!node.hasFocus) return;
+    Future.delayed(const Duration(milliseconds: 120), () {
+      if (mounted && node.hasFocus) _showKeyboard();
+    });
+  }
+
+  void _showKeyboard() {
+    if (!node.hasFocus) node.requestFocus();
+    SystemChannels.textInput.invokeMethod('TextInput.show');
+  }
+
+  @override
+  void dispose() { node.removeListener(_onFocus); node.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
