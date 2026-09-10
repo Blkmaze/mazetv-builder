@@ -71,15 +71,17 @@ gradle = f"{P}/android/app/build.gradle.kts"
 if os.path.exists(gradle):
     patch(gradle, [
         (r'applicationId\s*=\s*"[^"]+"', f'applicationId = "{a.package}"'),
-        (r'minSdk\s*=\s*[^\n]+', 'minSdk = 21\n        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }'),
+        # No ndk.abiFilters here: Flutter's --target-platform / --split-per-abi
+        # already restrict the ABIs, and AGP refuses abiFilters + splits together.
+        (r'minSdk\s*=\s*[^\n]+', 'minSdk = 21'),
     ])
 else:
     gradle = f"{P}/android/app/build.gradle"
     patch(gradle, [
         (r'applicationId\s+"[^"]+"', f'applicationId "{a.package}"'),
-        (r'minSdkVersion\s+[^\n]+', 'minSdkVersion 21\n        ndk { abiFilters "armeabi-v7a", "arm64-v8a" }'),
+        (r'minSdkVersion\s+[^\n]+', 'minSdkVersion 21'),
     ])
-print(f"[brand] applicationId -> {a.package}, minSdk 21, ABIs: armeabi-v7a + arm64-v8a only")
+print(f"[brand] applicationId -> {a.package}, minSdk 21")
 
 # 3. manifest ----------------------------------------------------------------
 man = f"{P}/android/app/src/main/AndroidManifest.xml"
