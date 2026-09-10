@@ -401,16 +401,19 @@ class _TvTextFieldState extends State<TvTextField> {
     move();
   }
 
+  /// While false the field tells Android it has *no* keyboard, so moving
+  /// onto it with the remote never opens one. OK on the field, or arriving
+  /// via the keyboard's Next key, flips it on and opens the keyboard.
+  bool _typing = false;
+
   late final FocusNode node = FocusNode(onKeyEvent: (n, e) {
     if (e is! KeyDownEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
     if (k == LogicalKeyboardKey.arrowDown) { _moveQuietly(n.nextFocus); return KeyEventResult.handled; }
     if (k == LogicalKeyboardKey.arrowUp) { _moveQuietly(n.previousFocus); return KeyEventResult.handled; }
-    // OK on the remote: Flutter only opens the keyboard for taps, so a
-    // d-pad user sitting on a field would otherwise get nothing.
     if (k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.enter ||
         k == LogicalKeyboardKey.numpadEnter || k == LogicalKeyboardKey.gameButtonA) {
-      _showKeyboard();
+      _startTyping();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -422,19 +425,24 @@ class _TvTextFieldState extends State<TvTextField> {
     node.addListener(_onFocus);
   }
 
-  /// Fire OS closes the keyboard on the "Next" action and doesn't reopen it
-  /// for the field that gains focus. Ask for it again once focus has landed.
   void _onFocus() {
-    if (!node.hasFocus) return;
-    if (DateTime.now().isBefore(_quietUntil)) return; // arrived by arrow key
-    Future.delayed(const Duration(milliseconds: 120), () {
-      if (mounted && node.hasFocus) _showKeyboard();
-    });
+    if (!node.hasFocus) {
+      if (mounted) setState(() => _typing = false);
+      return;
+    }
+    if (mounted) setState(() {}); // shows the "Press OK to type" hint
+    if (DateTime.now().isBefore(_quietUntil)) return; // arrived by arrow key: stay quiet
+    // Arrived by Next (or autofocus on the first field): keep typing going.
+    _startTyping();
   }
 
-  void _showKeyboard() {
+  void _startTyping() {
     if (!node.hasFocus) node.requestFocus();
-    SystemChannels.textInput.invokeMethod('TextInput.show');
+    if (!_typing) setState(() => _typing = true);
+    // Give the new keyboard type a frame to reach Android, then ask for it.
+    Future.delayed(const Duration(milliseconds: 80), () {
+      if (mounted && node.hasFocus) SystemChannels.textInput.invokeMethod('TextInput.show');
+    });
   }
 
   @override
@@ -442,6 +450,7 @@ class _TvTextFieldState extends State<TvTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: TextField(
@@ -449,12 +458,20 @@ class _TvTextFieldState extends State<TvTextField> {
         focusNode: node,
         obscureText: widget.obscure,
         autofocus: widget.autofocus,
+        keyboardType: _typing
+            ? (widget.obscure ? TextInputType.visiblePassword : TextInputType.url)
+            : TextInputType.none,
         textInputAction: widget.last ? TextInputAction.done : TextInputAction.next,
         // Next already moves focus on its own (doing it here too skipped a
         // field). Done just closes the keyboard, so that one gets a hook.
         onSubmitted: widget.last && widget.onDone != null ? (_) => widget.onDone!() : null,
         style: const TextStyle(fontSize: 20),
-        decoration: InputDecoration(labelText: widget.label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(
+          labelText: widget.label,
+          border: const OutlineInputBorder(),
+          helperText: node.hasFocus && !_typing ? 'Press OK to type' : null,
+          helperStyle: TextStyle(color: primary),
+        ),
       ),
     );
   }
