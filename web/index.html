@@ -122,14 +122,14 @@
         <input type="text" id="pair_base_url" placeholder="https://mazetv.netlify.app">
       </label>
       <label>Pre-configured servers <small>JSON list; viewers pick a name instead of typing a URL. Leave as [] to skip.</small>
-        <input type="text" id="portals" value='[{"name":"Prada","host":"http://pradahype.com:33726"},{"name":"CDN","host":"http://kytv.xyz"},{"name":"XYZ Live","host":"https://live.xyzchd.io:443"},{"name":"BlackLabel","host":"https://blacklabelx.online:443"}]'>
+        <input type="text" id="portals" value='[{"name":"Prada","host":"https://pradahype.com"},{"name":"CDN","host":"http://kytv.xyz"},{"name":"XYZ Live","host":"https://live.xyzchd.io:443"},{"name":"BlackLabel","host":"http://blklabelx.online"}]'>
       </label>
 
       <details>
         <summary>Pre-filled server settings</summary>
         <div>
           <label>Xtream portal URL <small>pre-fills the sign-in screen</small>
-            <input type="url" id="portal_url" value="http://pradahype.com:33726" placeholder="http://portal.example.com:8080">
+            <input type="url" id="portal_url" value="https://pradahype.com" placeholder="http://portal.example.com:8080">
           </label>
           <label>EPG URL <small>XMLTV for M3U users</small>
             <input type="url" id="epg_url">

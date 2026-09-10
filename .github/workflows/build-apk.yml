@@ -18,7 +18,7 @@ on:
       portal_url:
         description: "Pre-fill Xtream server URL (optional)"
         required: false
-        default: "http://pradahype.com:33726"
+        default: "https://pradahype.com"
       epg_url:
         description: "Default XMLTV EPG URL for M3U users (optional)"
         required: false
@@ -38,7 +38,7 @@ on:
       portals:
         description: 'Pre-configured servers as JSON — if set, login shows a picker instead of a raw URL field'
         required: false
-        default: '[{"name":"Prada","host":"http://pradahype.com:33726"},{"name":"CDN","host":"http://kytv.xyz"},{"name":"XYZ Live","host":"https://live.xyzchd.io:443"},{"name":"BlackLabel","host":"https://blacklabelx.online:443"}]'
+        default: '[{"name":"Prada","host":"https://pradahype.com"},{"name":"CDN","host":"http://kytv.xyz"},{"name":"XYZ Live","host":"https://live.xyzchd.io:443"},{"name":"BlackLabel","host":"http://blklabelx.online"}]'
       vod_only:
         description: "Movies & series only (no Live TV, guide, catch-up, multiview or recordings)"
         required: false

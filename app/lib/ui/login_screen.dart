@@ -116,15 +116,19 @@ class _LoginScreenState extends State<LoginScreen> {
               Text(b.appName, textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 44, fontWeight: FontWeight.bold, color: b.primaryColor)),
               const SizedBox(height: 24),
-              SegmentedButton<SourceType>(
-                segments: const [
-                  ButtonSegment(value: SourceType.xtream, label: Text('Xtream login'), icon: Icon(Icons.login)),
-                  ButtonSegment(value: SourceType.m3u, label: Text('M3U playlist'), icon: Icon(Icons.playlist_play)),
-                ],
-                selected: {mode},
-                onSelectionChanged: (s) => setState(() => mode = s.first),
-              ),
-              const SizedBox(height: 24),
+              // Movies & series come from the Xtream API; an M3U link can't
+              // supply them, so a VOD-only app doesn't offer that choice.
+              if (!b.vodOnly) ...[
+                SegmentedButton<SourceType>(
+                  segments: const [
+                    ButtonSegment(value: SourceType.xtream, label: Text('Xtream login'), icon: Icon(Icons.login)),
+                    ButtonSegment(value: SourceType.m3u, label: Text('M3U playlist'), icon: Icon(Icons.playlist_play)),
+                  ],
+                  selected: {mode},
+                  onSelectionChanged: (s) => setState(() => mode = s.first),
+                ),
+                const SizedBox(height: 24),
+              ],
               if (mode == SourceType.xtream) ...[
                 if (hasPortals) ...[
                   DropdownButtonFormField<Portal?>(
