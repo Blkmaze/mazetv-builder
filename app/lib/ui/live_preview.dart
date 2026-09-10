@@ -74,11 +74,28 @@ class _LivePreviewStripState extends State<LivePreviewStrip> {
     super.dispose();
   }
 
+  /// Stand-in for "no programme on now". The Now/Next code below reads
+  /// `now.start` / `now.stop` in several places; with a real object in `now`
+  /// there is never a null to dereference.
+  ///
+  /// Why this matters: on the Fire TV Cube (32-bit ARM) the compiled code
+  /// for this widget speculatively loaded `now.start` before the `now ==
+  /// null` check — the disassembly at the crash address showed the loads
+  /// hoisted above the compare. When `now` was null (channel with no guide
+  /// entry) that read garbage, then dereferenced it → SIGSEGV. Guarding
+  /// with a boolean and a non-null placeholder sidesteps it.
+  static final Programme _noProgramme = Programme(
+    channelId: '', title: '', description: '',
+    start: DateTime.fromMillisecondsSinceEpoch(0), stop: DateTime.fromMillisecondsSinceEpoch(0),
+  );
+
   @override
   Widget build(BuildContext context) {
     final channel = widget.channel;
     final repo = ChannelRepo.I;
-    final now = channel == null ? null : repo.epg.nowPlaying(channel.epgId);
+    final current = channel == null ? null : repo.epg.nowPlaying(channel.epgId);
+    final hasNow = current != null;
+    final Programme now = current ?? _noProgramme;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
@@ -101,11 +118,11 @@ class _LivePreviewStripState extends State<LivePreviewStrip> {
               final accent = Theme.of(context).colorScheme.primary;
               Programme? next;
               for (final p in repo.epg.upcoming(channel.epgId, max: 4)) {
-                if (now == null || !p.start.isBefore(now.stop)) { next = p; break; }
+                if (!hasNow || !p.start.isBefore(now.stop)) { next = p; break; }
               }
-              final total = now == null ? 0 : now.stop.difference(now.start).inMinutes;
-              final elapsed = now == null ? 0 : DateTime.now().difference(now.start).inMinutes;
-              final left = now == null ? 0 : now.stop.difference(DateTime.now()).inMinutes;
+              final total = !hasNow ? 0 : now.stop.difference(now.start).inMinutes;
+              final elapsed = !hasNow ? 0 : DateTime.now().difference(now.start).inMinutes;
+              final left = !hasNow ? 0 : now.stop.difference(DateTime.now()).inMinutes;
               final progress = total <= 0 ? 0.0 : (elapsed / total).clamp(0.0, 1.0);
 
               return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
@@ -114,12 +131,12 @@ class _LivePreviewStripState extends State<LivePreviewStrip> {
                   const SizedBox(width: 8),
                   Expanded(child: Text(channel.name, maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-                  if (now != null)
+                  if (hasNow)
                     Text('${fmt12(now.start)} – ${fmt12(now.stop)}',
                         style: const TextStyle(color: Colors.white54, fontSize: 13)),
                 ]),
                 const SizedBox(height: 6),
-                if (now == null)
+                if (!hasNow)
                   const Text('No programme info', style: TextStyle(color: Colors.white38, fontSize: 14))
                 else ...[
                   Text(now.title, maxLines: 1, overflow: TextOverflow.ellipsis,

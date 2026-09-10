@@ -65,7 +65,9 @@ class _LoginScreenState extends State<LoginScreen> {
       } catch (e) {
         // Most portals are plain http; if the user typed https and it refused, retry once on http.
         if (mode == SourceType.xtream && a.host.startsWith('https://') && e.toString().contains('Could not reach')) {
-          a = Account(type: a.type, host: a.host.replaceFirst('https://', 'http://'),
+          // Plain http on port 443 is never right — drop the port too.
+          final plain = a.host.replaceFirst('https://', 'http://').replaceFirst(RegExp(r':443(?=/|$)'), '');
+          a = Account(type: a.type, host: plain,
               username: a.username, password: a.password, epgUrl: a.epgUrl);
           await ChannelRepo.I.load(a, fallbackEpg: Branding.I.epgUrl);
         } else {

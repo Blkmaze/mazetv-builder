@@ -392,11 +392,20 @@ class TvTextField extends StatefulWidget {
 }
 
 class _TvTextFieldState extends State<TvTextField> {
+  /// Set when focus moved because of an arrow key. The field that receives
+  /// focus checks it and stays quiet — otherwise every field on the way up
+  /// or down would pop the keyboard and swallow the next arrow press.
+  static DateTime _quietUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  static void _moveQuietly(void Function() move) {
+    _quietUntil = DateTime.now().add(const Duration(milliseconds: 400));
+    move();
+  }
+
   late final FocusNode node = FocusNode(onKeyEvent: (n, e) {
     if (e is! KeyDownEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
-    if (k == LogicalKeyboardKey.arrowDown) { n.nextFocus(); return KeyEventResult.handled; }
-    if (k == LogicalKeyboardKey.arrowUp) { n.previousFocus(); return KeyEventResult.handled; }
+    if (k == LogicalKeyboardKey.arrowDown) { _moveQuietly(n.nextFocus); return KeyEventResult.handled; }
+    if (k == LogicalKeyboardKey.arrowUp) { _moveQuietly(n.previousFocus); return KeyEventResult.handled; }
     // OK on the remote: Flutter only opens the keyboard for taps, so a
     // d-pad user sitting on a field would otherwise get nothing.
     if (k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.enter ||
@@ -417,6 +426,7 @@ class _TvTextFieldState extends State<TvTextField> {
   /// for the field that gains focus. Ask for it again once focus has landed.
   void _onFocus() {
     if (!node.hasFocus) return;
+    if (DateTime.now().isBefore(_quietUntil)) return; // arrived by arrow key
     Future.delayed(const Duration(milliseconds: 120), () {
       if (mounted && node.hasFocus) _showKeyboard();
     });
