@@ -175,3 +175,22 @@ jobs:
             ${{ env.APK_ARM }}
             ${{ env.APK_ARM64 }}
             symbols-${{ github.run_number }}.zip
+
+      # Also refresh a fixed per-app release ("HyDr0-latest", "HyDr0Box-latest")
+      # so each app has a download URL that never changes:
+      #   https://github.com/<repo>/releases/download/<App>-latest/<App>-tv-arm.apk
+      # "releases/latest" can't do this once two apps share the repo — it flips
+      # to whichever app was built most recently.
+      - name: Set per-app release name
+        run: echo "APP_SAFE=$(echo '${{ inputs.app_name }}' | tr -cd '[:alnum:]')" >> "$GITHUB_ENV"
+      - name: Refresh per-app "latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.APP_SAFE }}-latest
+          name: ${{ inputs.app_name }} — latest (build ${{ github.run_number }})
+          make_latest: false
+          overwrite_files: true
+          files: |
+            ${{ env.APK_NAME }}
+            ${{ env.APK_ARM }}
+            ${{ env.APK_ARM64 }}
