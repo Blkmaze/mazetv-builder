@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ffi' show Abi;
 import 'package:http/http.dart' as http;
 import '../config/branding.dart';
 
@@ -42,19 +43,26 @@ class OtaService {
       if (build <= b.buildNumber) continue;
       if (best != null && build <= best.build) continue;
 
+      // Prefer the APK built for this device's CPU (less than half the size
+      // of the universal one); fall back to the universal APK for releases
+      // made before the split builds existed.
       final assets = (rel['assets'] as List?) ?? const [];
-      for (final a in assets) {
-        final name = (a['name'] ?? '').toString();
-        if (name == expectedAsset) {
-          best = OtaUpdate(
-            build: build,
-            downloadUrl: (a['browser_download_url'] ?? '').toString(),
-            assetName: name,
-            sizeBytes: (a['size'] as num?)?.toInt() ?? 0,
-          );
-          break;
+      OtaUpdate? pick(String wanted) {
+        for (final a in assets) {
+          final name = (a['name'] ?? '').toString();
+          if (name == wanted) {
+            return OtaUpdate(
+              build: build,
+              downloadUrl: (a['browser_download_url'] ?? '').toString(),
+              assetName: name,
+              sizeBytes: (a['size'] as num?)?.toInt() ?? 0,
+            );
+          }
         }
+        return null;
       }
+      final abiAsset = expectedAsset.replaceFirst('-tv.apk', Abi.current() == Abi.androidArm64 ? '-tv-arm64.apk' : '-tv-arm.apk');
+      best = pick(abiAsset) ?? pick(expectedAsset) ?? best;
     }
     return best;
   }
