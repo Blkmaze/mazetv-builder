@@ -27,7 +27,7 @@ class VodPlayerScreen extends StatefulWidget {
 
 class _VodPlayerScreenState extends State<VodPlayerScreen> {
   late final Player player = Player(configuration: const PlayerConfiguration(bufferSize: 48 * 1024 * 1024));
-  late final VideoController controller = VideoController(player);
+  late final VideoController controller = VideoController(player, configuration: bestVideoConfig());
   final _subs = <StreamSubscription>[];
   Duration position = Duration.zero;
   Duration duration = Duration.zero;

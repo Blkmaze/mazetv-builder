@@ -1,5 +1,31 @@
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'storage.dart';
+
+/// Settings > Player "software decoding" switch, cached so a player can pick
+/// its render path the moment it's created (SharedPreferences is async).
+class DecodePrefs {
+  static const key = 'force_software_decode';
+  static bool forceSoftware = false;
+  static Future<void> load() async {
+    forceSoftware = (await SharedPreferences.getInstance()).getBool(key) ?? false;
+  }
+}
+
+/// How video frames reach the screen.
+///
+/// Default path: decode with a hardware decoder, copy each frame out, upload
+/// it to the GPU, scale it with mpv's default (bilinear) filter, composite.
+/// On a Fire TV Cube that's a soft picture and a busy CPU.
+///
+/// `mediacodec_embed`: the hardware decoder writes straight into the video
+/// surface — no copy, no GPU resample. It's what the sharp-looking players
+/// on the same box do. Only valid with hardware decoding, so the software
+/// switch falls back to the default path.
+VideoControllerConfiguration bestVideoConfig() => DecodePrefs.forceSoftware
+    ? const VideoControllerConfiguration()
+    : const VideoControllerConfiguration(vo: 'mediacodec_embed', hwdec: 'mediacodec');
 
 /// Tunes a libmpv-backed Player for live IPTV over plain HTTP.
 ///
@@ -61,9 +87,11 @@ Future<void> tuneForLiveTs(Player player, {bool preview = false}) async {
     'demuxer-readahead-secs': secs,
     'demuxer-max-bytes': fwd,
     'demuxer-max-back-bytes': back,
-    // Only use hardware decoders known to be safe; "auto" will happily pick
-    // a broken vendor decoder and take the app down with it.
-    'hwdec': 'auto-safe',
+    // Match the render path: the full-screen players use the direct surface
+    // output (bestVideoConfig), which needs the real mediacodec decoder.
+    // Previews and multiview keep the default output, so they keep the
+    // safe list — plain 'mediacodec' can't render there.
+    'hwdec': DecodePrefs.forceSoftware ? 'no' : (preview ? 'auto-safe' : 'mediacodec'),
   };
 
   // Each one independently — an option missing on some libmpv build must

@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/branding.dart';
 import '../config/theme_controller.dart';
+import '../services/live_stream_tuning.dart';
 import '../services/channel_repo.dart';
 import '../services/recording_service.dart';
 import '../services/storage.dart';
@@ -267,6 +268,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: (v) {
               setState(() => softwareDecode = v);
               _setBool(kForceSoftwareDecodeKey, v);
+              DecodePrefs.forceSoftware = v;
             },
           ),
           SwitchListTile(

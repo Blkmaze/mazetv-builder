@@ -30,7 +30,7 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> {
   late final Player player = Player(configuration: const PlayerConfiguration(bufferSize: 32 * 1024 * 1024));
-  late final VideoController controller = VideoController(player);
+  late final VideoController controller = VideoController(player, configuration: bestVideoConfig());
   late int idx = widget.index;
   bool overlay = true;
   bool buffering = true;

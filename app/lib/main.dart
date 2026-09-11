@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'config/branding.dart';
+import 'services/live_stream_tuning.dart';
 import 'config/theme_controller.dart';
 import 'services/storage.dart';
 import 'ui/home_screen.dart';
@@ -11,6 +12,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   await Branding.load();
+  await DecodePrefs.load();
   await ThemeController.load();
   final servers = await Storage.loadServers();
   runApp(MazeTvApp(startLoggedIn: servers.isNotEmpty));
