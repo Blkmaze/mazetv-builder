@@ -104,6 +104,14 @@ if "installLocation" not in s:
     s = s.replace("<manifest ", '<manifest android:installLocation="internalOnly" ', 1)
 s = re.sub(r'android:label="[^"]*"', f'android:label="{a.app_name}"', s, count=1)
 s = s.replace("<application", '<application\n        android:banner="@drawable/ic_banner"\n        android:usesCleartextTraffic="true"', 1)
+# Fire TV's launcher reads the banner from the *activity* that carries the
+# LEANBACK_LAUNCHER category, not from <application>. Without it here the
+# home screen shows a grey placeholder tile, whatever the app ships.
+s = re.sub(r'<activity(\s+android:name="\.MainActivity")',
+           r'<activity\n            android:banner="@drawable/ic_banner"\1', s, count=1)
+if 'android:banner' not in s.split('<activity', 1)[1].split('>', 1)[0]:
+    # template didn't use ".MainActivity" — fall back to the first activity
+    s = s.replace('<activity', '<activity\n            android:banner="@drawable/ic_banner"', 1)
 s = s.replace('<category android:name="android.intent.category.LAUNCHER"/>',
               '<category android:name="android.intent.category.LAUNCHER"/>\n'
               '                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>', 1)
