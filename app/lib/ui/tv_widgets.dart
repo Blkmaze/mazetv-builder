@@ -401,9 +401,9 @@ class _TvTextFieldState extends State<TvTextField> {
     move();
   }
 
-  /// While false the field tells Android it has *no* keyboard, so moving
-  /// onto it with the remote never opens one. OK on the field, or arriving
-  /// via the keyboard's Next key, flips it on and opens the keyboard.
+  /// While false the field is read-only, so moving onto it with the remote
+  /// never opens a keyboard. OK on the field, or arriving via the keyboard's
+  /// Next key, flips it on and opens the keyboard.
   bool _typing = false;
 
   late final FocusNode node = FocusNode(onKeyEvent: (n, e) {
@@ -439,8 +439,9 @@ class _TvTextFieldState extends State<TvTextField> {
   void _startTyping() {
     if (!node.hasFocus) node.requestFocus();
     if (!_typing) setState(() => _typing = true);
-    // Give the new keyboard type a frame to reach Android, then ask for it.
-    Future.delayed(const Duration(milliseconds: 80), () {
+    // Flutter opens the keyboard when readOnly flips off; this is a backstop
+    // for Fire OS builds that need a second nudge.
+    Future.delayed(const Duration(milliseconds: 150), () {
       if (mounted && node.hasFocus) SystemChannels.textInput.invokeMethod('TextInput.show');
     });
   }
@@ -458,9 +459,12 @@ class _TvTextFieldState extends State<TvTextField> {
         focusNode: node,
         obscureText: widget.obscure,
         autofocus: widget.autofocus,
-        keyboardType: _typing
-            ? (widget.obscure ? TextInputType.visiblePassword : TextInputType.url)
-            : TextInputType.none,
+        // Read-only while navigating: Flutter opens no input connection for
+        // a read-only field, so no keyboard. Flipping readOnly off while the
+        // field has focus is the path Flutter itself uses to open one —
+        // reliable on Fire OS where a keyboard-type switch was ignored.
+        readOnly: !_typing,
+        keyboardType: widget.obscure ? TextInputType.visiblePassword : TextInputType.url,
         textInputAction: widget.last ? TextInputAction.done : TextInputAction.next,
         // Next already moves focus on its own (doing it here too skipped a
         // field). Done just closes the keyboard, so that one gets a hook.
