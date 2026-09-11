@@ -322,23 +322,44 @@ class PosterTile extends StatelessWidget {
         final focused = Focus.of(ctx).hasFocus;
         return InkWell(
           autofocus: autofocus,
-          onFocusChange: onFocusChange,
+          onFocusChange: (has) {
+            // Glide the row so the highlighted poster sits centred, instead
+            // of the default jump-to-edge.
+            if (has) {
+              Scrollable.ensureVisible(ctx, alignment: 0.5,
+                  duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
+            }
+            onFocusChange?.call(has);
+          },
           onTap: onSelect,
           borderRadius: BorderRadius.circular(8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Expanded(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.white10,
-                  border: Border.all(color: focused ? primary : Colors.transparent, width: 3),
+              child: AnimatedScale(
+                scale: focused ? 1.06 : 1.0,
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOutCubic,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOutCubic,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.white10,
+                    border: Border.all(color: focused ? primary : Colors.transparent, width: 3),
+                    boxShadow: focused
+                        ? [BoxShadow(color: primary.withOpacity(0.45), blurRadius: 14, spreadRadius: 1)]
+                        : const [],
+                  ),
+                  child: cover.isEmpty
+                      ? const Center(child: Icon(Icons.movie, color: Colors.white24, size: 40))
+                      // Decode at roughly display size (posters are ~150px wide
+                      // on a 2x TV): a 1000px cover decoded full-size per tile
+                      // is what made rows stutter and eat memory.
+                      : Image.network(cover, fit: BoxFit.cover, cacheWidth: 320, filterQuality: FilterQuality.low,
+                          gaplessPlayback: true,
+                          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.movie, color: Colors.white24, size: 40))),
                 ),
-                child: cover.isEmpty
-                    ? const Center(child: Icon(Icons.movie, color: Colors.white24, size: 40))
-                    : Image.network(cover, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.movie, color: Colors.white24, size: 40))),
               ),
             ),
             const SizedBox(height: 6),

@@ -43,6 +43,11 @@ class MazeTvApp extends StatelessWidget {
           textTheme: const TextTheme(bodyMedium: TextStyle(fontSize: 18)),
           listTileTheme: const ListTileThemeData(minVerticalPadding: 12),
           focusColor: accent.withOpacity(0.35),
+          // TV apps feel smoother with a short fade between screens than
+          // Android's phone-style slide.
+          pageTransitionsTheme: const PageTransitionsTheme(builders: {
+            TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          }),
         ),
         home: SplashScreen(next: startLoggedIn ? const HomeScreen() : const LoginScreen()),
         );

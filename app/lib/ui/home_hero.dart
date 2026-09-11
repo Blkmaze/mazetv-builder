@@ -160,6 +160,7 @@ class _HomeHeroState extends State<HomeHero> {
                         : Image.network(
                             backdrop,
                             key: ValueKey(backdrop),
+                            cacheWidth: 900,
                             fit: BoxFit.cover,
                             width: double.infinity,
                             height: double.infinity,

@@ -1,4 +1,3 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show KeyDownEvent, KeyEvent, LogicalKeyboardKey, SystemNavigator;
 import '../config/branding.dart';
@@ -36,13 +35,21 @@ class _HomeScreenState extends State<HomeScreen> {
   bool loading = true;
   String? activeProfileId;
   List<Channel> mostWatched = [];
-  String _backdrop = '';
-  HeroPick? _hero;
+  /// Whichever poster is highlighted. A ValueNotifier so the hero and the
+  /// wallpaper repaint on their own — moving the remote across a row used to
+  /// rebuild every row on Home for each step, which is what made it stutter.
+  final _showcaseN = ValueNotifier<HeroPick?>(null);
 
   @override
   void initState() {
     super.initState();
     _boot();
+  }
+
+  @override
+  void dispose() {
+    _showcaseN.dispose();
+    super.dispose();
   }
 
   Future<void> _boot() async {
@@ -234,12 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// A poster got focus: swap the blurred wallpaper and the hero banner.
   void _showcase(HeroPick pick) {
     if (!mounted) return;
-    if (pick.cover != _backdrop || pick.cacheKey != _hero?.cacheKey) {
-      setState(() {
-        _backdrop = pick.cover;
-        _hero = pick;
-      });
-    }
+    if (pick.cacheKey != _showcaseN.value?.cacheKey) _showcaseN.value = pick;
   }
 
   /// Colored remote buttons, matching the legend bottom-right:
@@ -296,10 +298,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final popularMovies = repo.supportsVod ? repo.popularMovies : const <VodItem>[];
     final popularSeries = repo.supportsVod ? repo.popularSeries : const <SeriesItem>[];
     // Before the remote lands on anything, showcase the top Popular title.
-    final heroPick = _hero ??
-        (popularMovies.isNotEmpty
-            ? HeroPick.movie(popularMovies.first)
-            : (popularSeries.isNotEmpty ? HeroPick.series(popularSeries.first) : null));
+    final defaultPick = popularMovies.isNotEmpty
+        ? HeroPick.movie(popularMovies.first)
+        : (popularSeries.isNotEmpty ? HeroPick.series(popularSeries.first) : null);
 
     return PopScope(
       canPop: false,
@@ -310,25 +311,30 @@ class _HomeScreenState extends State<HomeScreen> {
       onKeyEvent: _onColorKey,
       child: Scaffold(
       body: Stack(children: [
-        // ---- blurred backdrop of whichever poster is highlighted (Ghost-style)
+        // ---- blurred backdrop of whichever poster is highlighted (Ghost-style).
+        // The "blur" is a 40-pixel-wide decode stretched to the screen: same
+        // look as a real blur filter, but free — a full-screen blur every
+        // frame was the single heaviest thing the Cube's GPU had to do.
         Positioned.fill(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            child: _backdrop.isEmpty
-                ? const SizedBox.shrink()
-                : SizedBox.expand(
-                    key: ValueKey(_backdrop),
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                      child: Opacity(
-                        opacity: 0.6,
-                        // explicit size: inside the fade animation the image would
-                        // otherwise shrink to its own dimensions and show as a "card"
-                        child: Image.network(_backdrop, fit: BoxFit.cover, width: double.infinity, height: double.infinity,
-                            errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+          child: ValueListenableBuilder<HeroPick?>(
+            valueListenable: _showcaseN,
+            builder: (_, pick, __) {
+              final backdrop = pick?.cover ?? defaultPick?.cover ?? '';
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                child: backdrop.isEmpty
+                    ? const SizedBox.shrink()
+                    : SizedBox.expand(
+                        key: ValueKey(backdrop),
+                        child: Opacity(
+                          opacity: 0.6,
+                          child: Image.network(backdrop, fit: BoxFit.cover, width: double.infinity, height: double.infinity,
+                              cacheWidth: 40, filterQuality: FilterQuality.low,
+                              errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                        ),
                       ),
-                    ),
-                  ),
+              );
+            },
           ),
         ),
         Positioned.fill(
@@ -359,7 +365,10 @@ class _HomeScreenState extends State<HomeScreen> {
             Expanded(
               child: ListView(padding: const EdgeInsets.symmetric(vertical: 16), children: [
                 // ---- Ghost-style hero: follows whichever poster is highlighted
-                if (heroPick != null) HomeHero(pick: heroPick),
+                ValueListenableBuilder<HeroPick?>(
+                  valueListenable: _showcaseN,
+                  builder: (_, pick, __) => HomeHero(pick: pick ?? defaultPick),
+                ),
                 if (mostWatched.isNotEmpty && !Branding.I.vodOnly) ...[
                   const _RowHeader(title: 'Your Most Watched Channels'),
                   SizedBox(
