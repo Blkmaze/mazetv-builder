@@ -4,7 +4,6 @@ import '../models/account.dart';
 import '../models/server_config.dart';
 import '../services/channel_repo.dart';
 import '../services/storage.dart';
-import 'code_signin_screen.dart';
 import 'home_screen.dart';
 import 'tv_widgets.dart';
 
@@ -105,7 +104,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final b = Branding.I;
     final hasPortals = b.portals.isNotEmpty;
-    final hasPairing = b.pairBaseUrl.isNotEmpty;
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -169,14 +167,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: () => setState(() => showEpg = true),
                   child: const Text('Add a custom EPG URL (optional)', style: TextStyle(color: Colors.white54)),
                 ),
-              if (hasPairing) ...[
-                const SizedBox(height: 12),
-                TextButton.icon(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CodeSignInScreen())),
-                  icon: const Icon(Icons.qr_code, color: Colors.white70),
-                  label: const Text('Sign in with a code instead', style: TextStyle(color: Colors.white70)),
-                ),
-              ],
               const SizedBox(height: 8),
               Text(b.supportText, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54)),
             ]),
