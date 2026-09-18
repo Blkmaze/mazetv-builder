@@ -6,6 +6,7 @@ import 'config/theme_controller.dart';
 import 'services/storage.dart';
 import 'ui/home_screen.dart';
 import 'ui/login_screen.dart';
+import 'ui/sign_in_method_screen.dart';
 import 'ui/splash_screen.dart';
 
 Future<void> main() async {
@@ -51,7 +52,13 @@ class MazeTvApp extends StatelessWidget {
             TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
           }),
         ),
-        home: SplashScreen(next: startLoggedIn ? const HomeScreen() : const LoginScreen()),
+        // Skip the method-choice menu for brands that never had pairing
+        // configured (no pair_base_url) — go straight to the credentials form.
+        home: SplashScreen(
+          next: startLoggedIn
+              ? const HomeScreen()
+              : (b.pairBaseUrl.isNotEmpty ? const SignInMethodScreen() : const LoginScreen()),
+        ),
         );
       },
     );
