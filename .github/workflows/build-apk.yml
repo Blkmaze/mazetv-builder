@@ -51,7 +51,7 @@ on:
       pair_base_url:
         description: "Your Netlify site URL (e.g. https://mazetv.netlify.app) — enables 'Sign in with a code' on the login screen"
         required: false
-        default: ""
+        default: "https://wm-apk-builder.netlify.app"
 
 permissions:
   contents: write
