@@ -1,12 +1,12 @@
 // Polled by the TV app until the code above has been claimed.
-const { getStore } = require("@netlify/blobs");
+const { pairingStore } = require("./_store");
 const { json } = require("./_gh");
 
 exports.handler = async (event) => {
   const code = (event.queryStringParameters || {}).code || "";
   if (!/^\d{6}$/.test(code)) return json(400, { error: "Bad code" });
 
-  const store = getStore("mazetv-pairing");
+  const store = pairingStore();
   const slot = await store.get(code, { type: "json" });
   if (!slot) return json(404, { error: "expired" });
   if (!slot.claimed) return json(404, { error: "not claimed yet" });

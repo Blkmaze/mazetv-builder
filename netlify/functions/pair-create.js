@@ -1,5 +1,5 @@
 // Called by the TV app: mint a short code and an empty pairing slot.
-const { getStore } = require("@netlify/blobs");
+const { pairingStore } = require("./_store");
 const { json } = require("./_gh");
 
 function makeCode() {
@@ -10,7 +10,7 @@ function makeCode() {
 }
 
 exports.handler = async () => {
-  const store = getStore("mazetv-pairing");
+  const store = pairingStore();
   let code;
   for (let i = 0; i < 5; i++) {
     code = makeCode();

@@ -1,6 +1,6 @@
 // Called by the companion web page: attach real credentials to a code
 // someone already typed in on the TV.
-const { getStore } = require("@netlify/blobs");
+const { pairingStore } = require("./_store");
 const { json } = require("./_gh");
 
 exports.handler = async (event) => {
@@ -10,7 +10,7 @@ exports.handler = async (event) => {
     const code = (b.code || "").trim();
     if (!/^\d{6}$/.test(code)) return json(400, { error: "Enter the 6-digit code shown on your TV" });
 
-    const store = getStore("mazetv-pairing");
+    const store = pairingStore();
     const slot = await store.get(code, { type: "json" });
     if (!slot) return json(404, { error: "That code has expired. Go back to the TV and get a new one." });
 
